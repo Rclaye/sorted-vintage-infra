@@ -1,0 +1,102 @@
+openapi: 3.1.0
+info:
+  title: Orders
+  version: 1.0.0
+  description: >
+    Checkout orchestration and order state (FR-009 to FR-013). States and transitions are in data-model.md.
+    Health, metrics, auth and error rules are in contracts/README.md.
+servers:
+  - url: http://orders
+security:
+  - bearer: []
+paths:
+  /orders:
+    post:
+      summary: Start checkout. Reserves the listing, creates the PaymentIntent, returns its client secret.
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string }, description: "A retry with the same key returns the same order" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listing_id]
+              properties:
+                listing_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Order pending; listing reserved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Order"
+                  - type: object
+                    properties:
+                      client_secret: { type: string, description: "For the Payment Element; never logged" }
+        "403": { description: "Buyer is the seller (error: own_listing)" }
+        "409": { description: "Listing not available (error: not_available)" }
+        "503": { description: "Payment provider unreachable (error: payments_unavailable); the reservation is released before responding" }
+    get:
+      summary: The calling user's orders as buyer
+      responses:
+        "200":
+          description: Orders, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Order" } }
+  /orders/{order_id}:
+    get:
+      summary: One order (buyer or seller only)
+      parameters:
+        - { name: order_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "The order", content: { application/json: { schema: { $ref: "#/components/schemas/Order" } } } }
+        "404": { description: "Not found or not visible to the caller" }
+  /orders/{order_id}/payment-result:
+    post:
+      summary: >
+        Apply a payment outcome. Called only by the Payments worker with a client-credentials token.
+        Idempotent: results for a final order are accepted and ignored (FR-011).
+      parameters:
+        - { name: order_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_intent_id, outcome, event_key]
+              properties:
+                payment_intent_id: { type: string }
+                outcome: { type: string, enum: [succeeded, failed, canceled] }
+                event_key: { type: string, description: "The Payments inbox key, for tracing and audit" }
+                failure_reason: { type: string }
+      responses:
+        "200":
+          description: >
+            The order's state after applying the result. "refunded" means the payment succeeded after the
+            reservation was released; Payments must then refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { description: "Unknown order; Payments keeps the event and retries" }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Order:
+      type: object
+      required: [id, listing_id, buyer_sub, seller_sub, amount_cents, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        listing_id: { type: string, format: uuid }
+        buyer_sub: { type: string, format: uuid }
+        seller_sub: { type: string, format: uuid }
+        amount_cents: { type: integer }
+        status: { type: string, enum: [pending, paid, failed, refunded] }
+        failure_reason: { type: [string, "null"] }
+        reservation_expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        paid_at: { type: [string, "null"], format: date-time }
