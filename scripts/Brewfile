@@ -1,0 +1,10 @@
+# Sorted Vintage lab toolchain: only what Sprints 0 and 1 need.
+tap "hashicorp/tap"
+brew "hashicorp/tap/terraform"
+brew "kind"
+brew "kubernetes-cli"
+brew "helm"
+brew "gh"
+brew "pre-commit"
+brew "gitleaks"
+cask "orbstack"
