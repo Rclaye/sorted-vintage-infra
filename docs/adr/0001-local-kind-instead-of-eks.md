@@ -11,7 +11,7 @@ Available hardware: a Mac mini M4 with 16 GB, a MacBook Air M4 with 16 GB, and a
 
 ## Decision
 
-Run a multi-node Kind cluster (one control plane, two workers) on the Mac mini under OrbStack, created by Terraform. Dev and prod are namespaces in that one cluster. All images are linux/arm64.
+Run a multi-node Kind cluster (one control plane, two workers) on the Mac mini under Docker Desktop, created by Terraform. OrbStack is a lighter alternative if memory gets tight. Dev and prod are namespaces in that one cluster. All images are linux/arm64.
 
 ## Consequences
 

@@ -18,7 +18,7 @@
 - [ ] T002 [P] Add `.gitignore` (from the Clixx Terraform repo) and `.pre-commit-config.yaml` with gitleaks, terraform fmt, ruff and hadolint in all three repos
 - [ ] T003 [P] Copy this Spec Kit workspace into `infra/.specify/` and `infra/specs/`
 - [ ] T004 [P] Write `infra/docs/adr/0001-local-kind-instead-of-eks.md` and `0002-git-is-the-only-path-to-the-cluster.md`
-- [ ] T005 Write `specs/001-marketplace-local-cloud/research.md`: Stripe Connect test-mode onboarding and local webhook forwarding, OTel context over RabbitMQ headers, Kind port mapping on OrbStack
+- [ ] T005 Write `specs/001-marketplace-local-cloud/research.md`: Stripe Connect test-mode onboarding and local webhook forwarding, OTel context over RabbitMQ headers, Kind port mapping on Docker Desktop
 
 ## Phase 2: Foundational (Sprint 1, blocks every story)
 

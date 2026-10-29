@@ -43,7 +43,7 @@ echo "Mac mini (Tickets 0.3 and 0.4)"
 ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" true 2>/dev/null && pass "ssh $MINI with a key" || fail "cannot ssh to $MINI with a key"
 remote() { ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" "export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH; $1"; }
 for t in kind terraform kubectl helm; do remote "command -v $t >/dev/null" && pass "mini has $t" || fail "mini is missing $t"; done
-remote "docker info >/dev/null 2>&1" && pass "container runtime is running on the mini" || fail "OrbStack/Docker is not running on the mini"
+remote "docker info >/dev/null 2>&1" && pass "container runtime is running on the mini" || fail "Docker Desktop is not running on the mini"
 
 echo
 echo "Sprint 0 verification passed."
