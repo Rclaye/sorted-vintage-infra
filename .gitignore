@@ -42,6 +42,9 @@ build/
 .gradle/
 *.class
 
+# --- Claude Code (per-machine settings) ---
+.claude/settings.local.json
+
 # --- Editors and OS ---
 .DS_Store
 .idea/
