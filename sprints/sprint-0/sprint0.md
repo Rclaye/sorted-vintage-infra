@@ -17,7 +17,7 @@ Every repository exists with guardrails on, no old credential is still live or p
    ┌──────────────▼──────────────┐          ┌──────────────────────────────┐          ┌──────────────────────────────┐      │
    │  MacBook Air M4 (16 GB)     │   ssh    │  Mac mini M4 (16 GB)         │          │  MacBook Pro Intel (8 GB)    │      │
    │  Workstation                ├─────────►│  Lab host (on when working)  │          │  CI (from Sprint 1)          │◄─────┘
-   │  Editor, git, pre-commit    │          │  OrbStack, kind, terraform   │          │  Jenkins, SonarQube          │
+   │  Editor, git, pre-commit    │          │  Docker, kind, terraform     │          │  Jenkins, SonarQube          │
    └──────────────┬──────────────┘          └──────────────────────────────┘          └──────────────────────────────┘
                   │ git push
    ┌──────────────▼──────────────────────────────────────────────────────────────────────────────────┐
@@ -71,10 +71,10 @@ Story: As the platform owner, I want the Mac mini to carry the platform toolchai
 The lab runs in working sessions, not around the clock: the mini is on while I work and off otherwise.
 
 Implementation Requirements:
-- Install the toolchain: `brew bundle --file scripts/Brewfile` (OrbStack, kind, kubectl, Helm, Terraform, gh, pre-commit, gitleaks). Review the Brewfile first.
+- Install the toolchain: `brew bundle --file scripts/Brewfile` (kind, kubectl, Helm, Terraform, gh, pre-commit, gitleaks) plus Docker Desktop as the container runtime. Review the Brewfile first.
 - Keep the mini awake during a session with Amphetamine.
 - System Settings → General → Sharing: turn on Remote Login, so the Air can connect over SSH.
-- OrbStack settings: 12 GB of memory.
+- Docker Desktop → Settings → Resources: 12 GB of memory.
 
 Acceptance Criteria Verification:
 - `kind version`, `terraform version` and `docker info` succeed on the mini.

@@ -27,6 +27,10 @@ Editors: VS Code's Remote-SSH extension connects to `mac-mini` and works on the 
 
 The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. One-command start and stop (with a backup on stop) arrive in Sprint 1.
 
+## Sharing the mini with LocalMind
+
+LocalMind also runs on the mini, natively with Ollama. Do not run both at once: an 8B model takes 5–6 GB and the cluster up to 12 GB, out of 16 GB. Quit Ollama before starting a Sorted Vintage session.
+
 ## If the mini stops responding
 
 1. Check that it is awake and on the network (and, if used, online in Tailscale).

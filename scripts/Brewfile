@@ -7,4 +7,4 @@ brew "helm"
 brew "gh"
 brew "pre-commit"
 brew "gitleaks"
-cask "orbstack"
+# Container runtime: Docker Desktop, installed separately (OrbStack is a lighter alternative if memory gets tight)

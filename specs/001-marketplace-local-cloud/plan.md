@@ -13,7 +13,7 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 **Primary Dependencies**: FastAPI, SQLAlchemy 2, Jinja2 + HTMX (BFF pages), Spring Boot 3 (Web, Data JPA), Stripe SDK, OpenTelemetry SDKs and auto-instrumentation, Keycloak (OIDC), RabbitMQ client (aio-pika), Locust (traffic)
 **Storage**: PostgreSQL via the CloudNativePG operator, one cluster per environment with a database per service, backups to MinIO; MinIO for photos; RabbitMQ for events
 **Testing**: pytest + httpx, JUnit 5 + Testcontainers, contract tests on service APIs, k6 or Locust for SC-002 and SC-003, `verify_sprintN.sh` per sprint
-**Target Platform**: Kind on macOS (OrbStack) on a Mac mini M4, linux/arm64 images, reachable over Tailscale
+**Target Platform**: Kind on Docker Desktop on a Mac mini M4, linux/arm64 images, reached over SSH from the MacBook Air (Tailscale optional)
 **Project Type**: Web application, multi-service, across three repositories
 **Performance Goals**: p95 checkout under 2 s at the baseline traffic rate (SC-002); zero double-sales across 1,000 concurrent attempts (SC-003)
 **Constraints**: the lab runs in working sessions, so state must survive stop and start; at most 12 GB for all containers on the mini; $0 recurring cost; no inbound internet access to the lab (Stripe webhooks arrive through the Stripe CLI forwarder)
@@ -84,7 +84,7 @@ If the measured total exceeds 11 GB, dev services scale to zero when not in use 
 specs/001-marketplace-local-cloud/
 ├── spec.md
 ├── plan.md              # this file
-├── research.md          # Phase 0: Stripe Connect local webhooks, OTel over RabbitMQ, Kind on OrbStack networking
+├── research.md          # Phase 0: Stripe Connect local webhooks, OTel over RabbitMQ, Kind on Docker Desktop networking
 ├── data-model.md        # Phase 1: entities, states and transitions
 ├── quickstart.md        # Phase 1: empty machine to first purchase
 ├── contracts/           # Phase 1: OpenAPI per service, AsyncAPI for the orders exchange
