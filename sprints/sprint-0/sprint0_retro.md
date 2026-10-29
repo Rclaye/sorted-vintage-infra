@@ -9,11 +9,11 @@ Sprint 0 delivered a clean, protected starting point. The three Sorted Vintage r
 ### Ticket 0.1: Retire Clixx-Era Secrets
 
 - The AWS account used for the Clixx projects no longer exists, so its RDS, EC2 and SonarQube hosts and their credentials are gone with it.
-- The SonarQube token came from the class SonarQube account. It is dead if that server is gone; otherwise it should be revoked in its UI (follow-up).
+- The SonarQube token came from the class SonarQube account, whose server is believed to be gone, so the token no longer works.
 - `scripts/audit-old-secrets.sh` scanned 12 public repositories. gitleaks found no secrets in any of them, but the file-history check found committed Terraform files in two:
     - `Clixx`: `terraform.tfstate`, its backup and `terraform.tfvars` (in two folders)
     - `Terraform_Clixx_Retail_Reporting_Infra`: three `terraform.tfvars` files
-- Decision: make both repositories private rather than rewrite their history.
+- Both repositories were made private rather than rewriting their history. None of the old Clixx passwords is reused anywhere.
 
 ### Ticket 0.2: Repositories With Guardrails
 
@@ -34,7 +34,7 @@ Sprint 0 delivered a clean, protected starting point. The three Sorted Vintage r
 | Two leftover Docker volumes (one a duplicate of the native Ollama models) | 3.3 GB |
 | Hugging Face cache (image-generation models no longer used) | 36 GB |
 
-- LocalMind's native Ollama models were kept.
+- Removing the remaining Ollama models from the mini was requested at the end of the sprint; LocalMind downloads them again when needed.
 
 ### Ticket 0.4: SSH From the Air to the Mini
 
@@ -52,7 +52,7 @@ Sprint 0 delivered a clean, protected starting point. The three Sorted Vintage r
 | Always-on mini (no sleep, auto-restart) | On only during working sessions, kept awake with Amphetamine | The lab is used in sessions; specs now require one-command start and stop with state surviving between sessions |
 | `bootstrap-mac.sh` | Removed; tools installed directly with Homebrew | Keep setup minimal |
 | OrbStack | Docker Desktop | Already installed; OrbStack stays an option if memory gets tight |
-| Tailscale for remote access | Deferred; SSH over the home network | Not needed for sessions at home |
+| Tailscale for remote access | Deferred; SSH over the home network | Not needed for sessions at home, and the Tailscale client misbehaved during setup |
 | Self-hosted SonarQube on the Intel Mac | SonarQube Cloud free plan proposed for Sprint 1 | Free for public repositories, adds pull request analysis, needs no server |
 | `brew bundle` on the Air | Not run | Everything the Air needs was already installed; its Terraform comes from homebrew-core, which would clash with the Brewfile's HashiCorp tap |
 
@@ -65,11 +65,12 @@ Sprint 0 delivered a clean, protected starting point. The three Sorted Vintage r
 
 ## Follow-Ups
 
-- [ ] Confirm `Clixx` and `Terraform_Clixx_Retail_Reporting_Infra` show as private, and that the portfolio does not link to them.
-- [ ] Change any old Clixx password reused elsewhere.
-- [ ] Revoke the class SonarQube token if that server still exists.
+- [x] Make `Clixx` and `Terraform_Clixx_Retail_Reporting_Infra` private.
+- [x] Check for reused Clixx passwords: none.
+- [x] Class SonarQube server: believed gone, so its token is dead.
+- [ ] Remove all Ollama models from the mini and confirm the space freed.
 - [ ] Confirm the home router has no port forwarding rules.
 - [ ] Add a passphrase to the Air's SSH key (`ssh-keygen -p -f ~/.ssh/id_ed25519`) and store it in the Keychain.
 - [ ] Run `pre-commit autoupdate` in each repository as a pull request, as the first test of the branch rules.
 - [ ] Quit Ollama before each Sorted Vintage session; never run LocalMind and the cluster together.
-- [ ] Optional: Tailscale for working away from home.
+- [ ] Tailscale for working away from home: install on both Macs, name the mini `mac-mini`, disable its key expiry, add a `mac-mini-ts` SSH alias, test from a phone hotspot.
