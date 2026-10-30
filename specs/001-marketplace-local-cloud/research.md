@@ -105,6 +105,20 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Spike (Sprint 1, during T021)**: confirm where the plugin reports the last archived WAL time (the `Cluster` condition `ContinuousArchiving` and the `ObjectStore` status are the candidates), and that `archive_timeout` can be set in `spec.postgresql.parameters`. Write the field names into T013.
 - **Alternatives considered**: commit a timestamped `Backup` manifest to the GitOps repo from `make down` (meets Principle I, but every session would need a pull request to a protected branch); record a session-end `Backup` as an exception to Principle I (keeps the simplest script, but makes the first exception to the rule the whole program depends on); hourly `ScheduledBackup` only (loses up to an hour of data).
 
+## R15. CI hosts and how they are reached
+
+- **Decision**:
+  - **Jenkins controller** on the Intel MacBook Pro, installed with Homebrew `jenkins-lts` and run by a LaunchAgent bound to `127.0.0.1:8080`. Its configuration (plugins, the mini agent, jobs) is code in `infra/jenkins/` (Configuration as Code).
+  - **Lab tunnel**: the Intel Mac keeps one outbound SSH connection to the Mac mini with two remote forwards, `127.0.0.1:8081 → Jenkins` and `127.0.0.1:2222 → the Intel Mac's sshd`. The macOS firewall on the Intel Mac blocks all incoming connections, so nothing on it is reachable from the home network. The Air reaches Jenkins with a `LocalForward` on its existing `mac-mini` connection and gets a shell with `ProxyJump` ([intel-mac-jenkins.md](../../docs/runbooks/intel-mac-jenkins.md)).
+  - **Mini agent**: launched by the controller over SSH, outbound from the Intel Mac to the mini's existing SSH. There is no inbound agent port (50000). GitHub cannot reach Jenkins, so jobs poll Git every 5 minutes.
+  - **Code quality**: SonarQube Cloud's free plan, CI-based analysis from the app repository's GitHub Actions, one SonarQube Cloud project per service in the monorepo, and the quality gate reported on each pull request by the SonarQube Cloud GitHub App. It replaces a self-hosted SonarQube on the Intel Mac.
+- **Rationale**: Principle VI says no port is opened for the lab, and Tailscale is deferred (R2). A reverse tunnel opens no new listener anywhere: it reuses the mini's key-only SSH, which is already the accepted way in. The tunnel key is restricted on the mini to those two listens, with no shell and no other forwards. SonarQube Cloud is free for public repositories and adds pull request decoration. It also takes about 2 GB of Elasticsearch and Postgres off an 8 GB machine, which leaves the Intel Mac for Jenkins alone.
+- **Cost**: $0. The free plan covers public repositories; the app repository is public.
+- **Spike (Sprint 1, T104)**: confirm that with "Block all incoming connections" on, `nc -z` from the mini to the Intel Mac's ports 22 and 8080 fails, and that the reverse-tunnelled loopback connection to its sshd still works.
+- **Spike (Sprint 1, T105)**: confirm the SonarQube scan action runs on `ubuntu-24.04-arm`. If it does not, run only the scan job on `ubuntu-24.04`; analysis produces no image, so the arm64 rule for runtime images is unaffected.
+- **Alternatives considered**: Jenkins on `0.0.0.0` with key-only SSH on the Intel Mac (opens two listeners on the home network); Tailscale (deferred, R2); a Jenkins inbound agent (needs port 50000 on the controller); self-hosted SonarQube (about 2 GB on an 8 GB machine, and a server to patch); SonarQube Cloud's automatic analysis (not available for monorepos with several projects).
+- **Constitution impact**: the Additional Constraints line "Intel MacBook Pro 8 GB runs Jenkins and SonarQube only" no longer matches. It needs a PATCH amendment with an ADR (T106).
+
 ---
 
 ## Plan changes from this research
@@ -117,7 +131,8 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R5, R8 | Reconciliation loop, inbox and outbox added to key design decisions |
 | R10 | Barman Cloud Plugin and cert-manager; memory row updated |
 | R14 | `make down` only checks that WAL archiving is current; it creates no `Backup` |
+| R15 | Jenkins controller on loopback behind the lab tunnel; SonarQube Cloud for code quality |
 
 ## Tasks
 
-These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084.
+These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084; the Jenkins controller, lab tunnel, SonarQube Cloud and the constitution amendment are T103–T106.

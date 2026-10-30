@@ -42,7 +42,8 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 | Environments | `sv-dev` and `sv-prod` namespaces; shared platform add-ons in their own namespaces | Clarification 2026-10-29 |
 | Sessions | `make up` starts the Kind node container and waits for Argo CD health; `make down` checks, read-only, that each database's WAL archive is current, then stops the node. Continuous WAL archiving (`archive_timeout` 60 s) and a daily `ScheduledBackup` are declared in Git, so nothing is written to the cluster at session end (research R14). Data and telemetry live on persistent volumes | Clarification 2026-10-29; FR-024 |
 | Images | GitHub Actions on `ubuntu-24.04-arm`, Trivy, push to GHCR, tag commit to GitOps repo | Constitution I; Intel Mac stays out of the build path |
-| Infra pipeline | Jenkins controller on the Intel Mac, agent on the mini, plan → approval → apply | Constitution III; reuses the existing Jenkinsfile stages |
+| Infra pipeline | Jenkins controller on the Intel Mac bound to loopback, reached through the lab tunnel (a reverse SSH tunnel to the mini); agent on the mini launched over SSH; jobs poll Git; plan → approval → apply | Constitution III and VI; no port open on the home network (research R15) |
+| Code quality | SonarQube Cloud free plan, CI-based analysis per service from GitHub Actions, quality gate on each pull request | Free for public repositories; keeps the 8 GB Intel Mac for Jenkins only (research R15) |
 
 ### Memory budget (estimate, to be measured in Sprint 1)
 
@@ -73,7 +74,7 @@ If the measured total exceeds 11 GB, dev services scale to zero when not in use 
 | III. Gate before change | Pass | Jenkins approval before apply; prod overlays change only by PR; Kyverno policies run in CI and at admission |
 | IV. Ground truth | N/A | No AI claims in this feature; change events and traffic patterns are prepared for Project 2 |
 | V. Observable by default | Pass | OTel SDK in every service, trace context propagated through RabbitMQ message headers, JSON logs with trace IDs |
-| VI. Secure by default | Pass with deviation | Stripe test keys in Kubernetes Secrets created by Terraform from a local, git-ignored file; Trivy gate; non-root containers. Tailscale is deferred (Sprint 0 retro), so the lab is reached by key-only SSH on the home network with ingress bound to loopback; see Complexity Tracking |
+| VI. Secure by default | Pass with deviation | Stripe test keys in Kubernetes Secrets created by Terraform from a local, git-ignored file; Trivy gate; non-root containers. Jenkins and the Intel Mac have no listener on the home network (research R15). Tailscale is deferred (Sprint 0 retro), so the lab is reached by key-only SSH on the home network with ingress bound to loopback; see Complexity Tracking |
 | VIII. Declarative infrastructure | Pass | Terraform stops at the cluster and Argo CD; databases, buckets and backups are CloudNativePG and Kubernetes resources |
 | VII. Modest app | Pass | No offers, shipping, messaging or ratings; Postgres search instead of a search engine |
 

@@ -14,6 +14,8 @@
 - Paths are prefixed by repository: `infra/`, `app/`, `gitops/`. Paths under `specs/` are in `infra/`.
 - Field rules quoted in a task come from [data-model.md](./data-model.md); API shapes come from the named contract file.
 
+**Task IDs**: T103–T106 were added after generation and placed where they run. They are numbered after T102 so that existing references stay valid.
+
 **Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 and Phase 4 up to T079 = Sprint 2 · the rest of Phase 4 through Phase 9 = Sprint 3 · Phase 10 = Gate 1 release
 
 ---
@@ -48,7 +50,9 @@
 - [ ] T011 Write `infra/terraform/modules/argocd-bootstrap/` (Helm release of Argo CD in namespace `argocd`, plus an `Application` pointing at `gitops/bootstrap/root-app.yaml`) and `infra/terraform/bootstrap/main.tf`
 - [ ] T012 Write `infra/terraform/modules/secrets/` creating Kubernetes Secrets in `sv-dev` and `sv-prod` from `infra/terraform/bootstrap/secrets.auto.tfvars` (git-ignored): each environment's Stripe secret key, publishable key and webhook signing secret(s) from its own sandbox; database passwords; and the mkcert `*.sortedvtg.lan` certificate and key as a `kubernetes.io/tls` Secret in `ingress-nginx`. Commit `infra/terraform/bootstrap/secrets.auto.tfvars.example` with placeholder values only
 - [ ] T013 Write `infra/Makefile` targets `up` (start the Kind node container, then wait until every Argo CD Application is `Synced` and `Healthy`, timeout 10 minutes), `down` (read-only: wait until each CloudNativePG `Cluster` reports continuous archiving as working and its last archived WAL is no older than 120 seconds, wait 60 more seconds, then stop the node container; it creates nothing in the cluster, [research R14](./research.md#r14-backing-up-at-session-end-without-writing-to-the-cluster)), `rebuild` (`terraform apply` for `cluster` then `bootstrap`, then wait for health) and `destroy` (FR-024, FR-018)
-- [ ] T014 Write `infra/jenkins/Jenkinsfile` (fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval) and connect the mini as an agent labelled `lab`
+- [ ] T103 Jenkins controller as code on the Intel Mac ([research R15](./research.md#r15-ci-hosts-and-how-they-are-reached)): `infra/jenkins/plugins.txt` (configuration-as-code, workflow-aggregator, git, ssh-slaves, credentials-binding, pipeline-stage-view) installed with the Jenkins Plugin Installation Manager Tool, and `infra/jenkins/casc.yaml` (copied to `~/.jenkins/casc.yaml` by `infra/scripts/lab-tunnel/intel-mac-setup.sh`) defining: the node `mac-mini` labelled `lab`, launched over SSH to `ricomillzs-Mac-mini.local` with credential ID `mini-agent-ssh`; zero executors on the controller; and the pipeline job `infra-terraform` from `infra/jenkins/Jenkinsfile`, polling SCM `H/5 * * * *`. No secret values in either file; credentials are entered once in the Jenkins UI
+- [ ] T104 Lab tunnel per [infra/docs/runbooks/intel-mac-jenkins.md](../../docs/runbooks/intel-mac-jenkins.md): run `infra/scripts/lab-tunnel/intel-mac-setup.sh` on the Intel Mac and `infra/scripts/lab-tunnel/authorize-tunnel-key.sh` on the mini, turn on "Block all incoming connections" on the Intel Mac, add the `LocalForward` and `intel-mac` entries to the Air's `~/.ssh/config`; record in `infra/sprints/sprint-1/spikes.md` that `nc -z` from the mini to the Intel Mac's ports 22 and 8080 fails, that ports 8081 and 2222 on the mini listen on `127.0.0.1` only, and that `http://localhost:8081` and `ssh intel-mac` work from the Air
+- [ ] T014 Write `infra/jenkins/Jenkinsfile` (fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval), running on agent label `lab`; needs T103 and T104
 - [ ] T015 [P] Write `infra/docs/runbooks/lab-session.md`: open the SSH tunnel `ssh -N -L 8443:127.0.0.1:443 mac-mini`, the `/etc/hosts` entries on the Air (`dev`, `prod`, `grafana`, `argocd`, `mail` `.sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`
 
 ### GitOps platform (gitops)
@@ -70,7 +74,9 @@
 - [ ] T027 Write the Copier template `app/templates/service-fastapi/`: FastAPI app with `GET /healthz` (200 `{"status":"ok"}` when its database and queue are reachable, else 503) and `GET /metrics` (Prometheus, including `http_server_request_duration_seconds` by route and status); OTel SDK with OTLP export and `traceparent` propagation; JSON logs with `timestamp`, `level`, `service`, `env`, `trace_id`, `span_id`, `message`; JWT validation middleware that checks Keycloak signature, audience and expiry and returns 401 otherwise (FR-003); the error body `{"error": "<machine_code>", "message": "<human text>"}`; multi-stage `Dockerfile` running as a non-root user; pytest skeleton; and `deploy/` with a kustomize `base` and `overlays/{dev,prod}` that pass the T026 policies (FR-026; [contracts/README.md](./contracts/README.md))
 - [ ] T028 Generate `app/services/bff/` from the template as a stub that serves `/healthz` and `/metrics`
 - [ ] T029 Write `app/.github/workflows/build.yml`: for each changed `services/*`, run lint and tests, build `linux/arm64` on `ubuntu-24.04-arm`, run Trivy and fail on critical, push to `ghcr.io/rclaye/sv-<service>:<git-sha>`, then commit the new tag to `gitops/services/<service>/overlays/dev/kustomization.yaml` with a GitOps deploy key (no cluster credentials, Constitution I)
+- [ ] T105 SonarQube Cloud free plan ([research R15](./research.md#r15-ci-hosts-and-how-they-are-reached)): create the organization `rclaye` bound to GitHub, install the SonarQube Cloud GitHub App on `sorted-vintage-app`, and turn off automatic analysis; create project `rclaye_sv-bff`, with one project `rclaye_sv-<service>` per service as each one is created; add `app/services/bff/sonar-project.properties` (project key, `sonar.sources=app`, `sonar.tests=tests`, `sonar.python.coverage.reportPaths=coverage.xml`), and the same file to the T027 template; add a `sonar` step to `app/.github/workflows/build.yml` after tests using `SonarSource/sonarqube-scan-action` (pinned to a release tag) with `projectBaseDir: services/<service>` and the repository secret `SONAR_TOKEN`, which you create in SonarQube Cloud and add in GitHub yourself; confirm the quality gate appears on a pull request
 - [ ] T030 Write `gitops/services/bff/{base,overlays/dev,overlays/prod}` and `gitops/.github/workflows/promote.yml`, which opens a PR copying a service's dev image tag into its prod overlay
+- [ ] T106 Write `infra/docs/adr/0008-jenkins-behind-the-lab-tunnel-and-sonarqube-cloud.md`, and amend `infra/.specify/memory/constitution.md` (PATCH, 1.1.0 → 1.1.1): change "Intel MacBook Pro 8 GB runs Jenkins and SonarQube only" to "Intel MacBook Pro 8 GB runs the Jenkins controller only; code analysis uses SonarQube Cloud's free plan", with an updated Sync Impact Report
 - [ ] T031 Write `infra/sprints/sprint-1/verify_sprint1.sh`: Argo CD apps `Synced` and `Healthy`, BFF `/healthz` returns 200 in both namespaces, every `gitops/tests/policy/bad/` manifest is rejected by `kubectl apply --dry-run=server`, and `terraform plan` reports no changes
 - [ ] T032 Measure real memory use against the plan's budget (target about 9.2 GB of 12 GB) and record it in `infra/sprints/sprint-1/sprint1_retro.md`; if above 11 GB, scale dev services to zero when idle before cutting anything else
 
@@ -225,7 +231,7 @@
 - [ ] T096 [P] Notification outage drill for SC-007 ([quickstart step 7](./quickstart.md#7-notifications-outage-sc-007)); record delivery times after recovery
 - [ ] T097 [P] Policy proof for SC-010 ([quickstart step 6](./quickstart.md#6-policy-holds-by-every-route-sc-010-fr-027)), recorded in `infra/sprints/sprint-3/evidence.md`
 - [ ] T098 Run the full rebuild drill through Jenkins (T077), confirm SC-004, and record the time in `infra/docs/runbooks/rebuild.md`
-- [ ] T099 Build Listings in Jenkins as well as GitHub Actions; collect build time, setup effort and failure handling for the comparison article
+- [ ] T099 Build Listings in Jenkins as well as GitHub Actions (Jenkins builds use the mini agent; the Intel Mac runs no builds); collect build time, setup effort and failure handling for the comparison article
 - [ ] T100 Write `infra/sprints/sprint-3/verify_sprint3.sh` covering SC-001 to SC-010 where automatable
 - [ ] T101 [P] Write ADRs in `infra/docs/adr/`: 0003 (Stripe Connect through the CLI forwarder, one sandbox per environment), 0004 (namespaces, not clusters), 0005 (CloudNativePG with the Barman Cloud Plugin over Crossplane), 0006 (policy in CI and at admission), 0007 (single-node Kind, and the temporary SSH-only access until Tailscale)
 - [ ] T102 Write the Gate 1 case study and the "Jenkins or GitHub Actions?" article in `infra/docs/case-studies/`
@@ -237,7 +243,7 @@
 ### Phase dependencies
 
 - **Phase 1**: T008 must pass before T010; T009 must finish before T012 and T049.
-- **Phase 2** depends on Phase 1 and blocks every story. Within it: T010 → T011 → T016; T012 needs T009; T021 needs T017 and T022; T026 before any service manifest; T027 → T028 → T030; T013 needs T021.
+- **Phase 2** depends on Phase 1 and blocks every story. Within it: T010 → T011 → T016; T012 needs T009; T021 needs T017 and T022; T026 before any service manifest; T027 → T028 → T030; T013 needs T021; T104 → T103 → T014; T105 needs T029.
 - **Phases 3–9** depend on Phase 2.
 - **Phase 10** depends on every story it measures.
 

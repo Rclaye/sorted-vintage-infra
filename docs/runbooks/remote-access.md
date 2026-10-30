@@ -10,22 +10,26 @@ ssh mac-mini
 
 If this hangs, check that the mini is awake; away from home, check that both machines show as connected in Tailscale.
 
-## Reach web UIs on the mini
+## Reach web UIs in the lab
 
-Port-forward on the mini, tunnel from the Air, then open `http://localhost:<port>` in a browser on the Air.
+From Sprint 1, one connection carries everything:
 
-| UI | On the mini | Tunnel from the Air |
-| --- | --- | --- |
-| Argo CD | `kubectl -n argocd port-forward svc/argocd-server 8080:443` | `ssh -L 8080:localhost:8080 mac-mini` |
-| Grafana | `kubectl -n monitoring port-forward svc/grafana 3000:80` | `ssh -L 3000:localhost:3000 mac-mini` |
+```bash
+ssh -N mac-mini
+```
 
-(The namespaces and service names are confirmed in Sprint 1.)
+With the `LocalForward` lines from [intel-mac-jenkins.md](./intel-mac-jenkins.md#one-time-setup) in `~/.ssh/config`, this forwards:
+
+- the cluster's ingress, at `https://<host>.sortedvtg.lan:8443` (Argo CD, Grafana, Mailpit and the marketplace; see [lab-session.md](./lab-session.md));
+- Jenkins on the Intel Mac, at `http://localhost:8081`, through the lab tunnel.
+
+`ssh intel-mac` opens a shell on the Intel Mac through the same tunnel. The Intel Mac has no port open on the home network.
 
 Editors: VS Code's Remote-SSH extension connects to `mac-mini` and works on the mini's files directly.
 
 ## Sessions
 
-The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. One-command start and stop (with a backup on stop) arrive in Sprint 1.
+The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. One-command start and stop arrive in Sprint 1: `make up` and `make down`, which checks that the database backups are current before stopping.
 
 ## Sharing the mini with LocalMind
 
