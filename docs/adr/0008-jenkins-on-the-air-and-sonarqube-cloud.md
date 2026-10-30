@@ -15,6 +15,7 @@ Constitution 1.1.0 put Jenkins and a self-hosted SonarQube on the Intel MacBook 
 ## Decision
 
 - **Two machines.** The Mac mini is the cluster host and the Jenkins build agent (label `lab`). The MacBook Air runs local models and the Jenkins controller, as its own standard account `ricomillz` through a LaunchDaemon, bound to `127.0.0.1:8080`, with zero executors and one job (`infra-terraform`, `main` only). The Intel MacBook Pro leaves the lab.
+- **The lab runs as the mini's `bot` account.** On the Mac mini, the standard (non-admin) account `bot` owns the whole lab: Docker Desktop with its 12 GB, the Kind cluster, the `sorted-vintage-infra` clone and `secrets.auto.tfvars`. The Jenkins agent logs in as `bot`. The mini's admin account `ricomillz` is used only for Homebrew installs and system settings. Docker Desktop's socket belongs to whoever runs it, so the lab cannot be split across two accounts.
 - **Code analysis** uses SonarQube Cloud's free plan, run from the app repository's GitHub Actions, with the quality gate on each pull request.
 - **Principle II** reads "one command, `make rebuild`, which applies the Terraform roots in order and waits for Argo CD to sync". The two roots stay. The intent is unchanged: an empty machine comes back with no manual step.
 
@@ -32,6 +33,8 @@ Constitution 1.1.0 put Jenkins and a self-hosted SonarQube on the Intel MacBook 
 
 - One machine fewer to power on, patch and secure each session.
 - The Air holds the agent key and the Jenkins credentials store. Neither gives cluster access; the kubeconfig stays on the mini. Running Jenkins as a separate standard account keeps it away from the everyday account's keys and files, provided that home folder is `chmod 700` (runbook).
+- Builds and Terraform never run with admin rights, and never near the mini admin's keys or `gh` login.
+- `bot` needs a logged-in desktop session on the mini for Docker Desktop to run.
 - Jenkins is available only while the Air is awake, which is exactly when a session runs. Jobs poll Git, because GitHub cannot reach the controller.
 - Memory on the Air is tighter when a local model runs alongside Jenkins; stop Jenkins first if needed.
 - Analysis results live in SonarQube Cloud, outside the lab.
