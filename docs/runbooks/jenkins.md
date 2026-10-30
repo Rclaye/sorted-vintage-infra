@@ -69,10 +69,10 @@ The first command starts Jenkins and the second stops it. They are also in [lab-
 ## Check it is closed
 
 ```bash
-lsof -nP -iTCP:8080 -sTCP:LISTEN
+sudo lsof -nP -iTCP:8080 -sTCP:LISTEN
 ```
 
-This must show `127.0.0.1:8080` only, with `ricomillz` in the USER column. `verify_sprint1.sh` checks both.
+This must show `127.0.0.1:8080` only, with `ricomillz` in the USER column. It needs `sudo`: without it, `lsof` lists only your own processes, and Jenkins runs as another account. `verify_sprint1.sh` checks both without `sudo`, using `netstat` and `ps`.
 
 ## Rules for jobs
 

@@ -148,7 +148,7 @@ Implementation Requirements:
 - T106 ADR-0008 (Jenkins on the Air; SonarQube Cloud instead of self-hosted; the lab drops to two machines) and a PATCH amendment to the constitution's hardware lines (1.1.0 → 1.1.1).
 
 Acceptance Criteria Verification:
-- On the Air, `lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, owned by the Air's `ricomillz`, and `http://localhost:8080` shows Jenkins.
+- On the Air, `sudo lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, owned by the Air's `ricomillz`, and `http://localhost:8080` shows Jenkins.
 - The Air's everyday account cannot read `/Users/ricomillz/.ssh/sv_jenkins_agent`, and the Air's `ricomillz` is not in the `admin` group.
 - Jenkins has exactly one job, `infra-terraform`, and it builds `main` only.
 - The `mac-mini` agent is online in Jenkins, and an `infra-terraform` run shows plan, a paused approval, and apply on it.
