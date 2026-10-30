@@ -121,6 +121,13 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Alternatives considered**: Jenkins on the Intel Mac (needs a third machine on all session, and a reverse SSH tunnel plus firewall rules to stay closed to the home network; tried and dropped on 2026-10-30); Jenkins on the mini (competes with the cluster for the 4 GB left outside Docker); a GitHub Actions self-hosted runner on the mini instead of Jenkins (simpler, but removes the Jenkins-versus-Actions comparison the program plans to publish); self-hosted SonarQube (about 2 GB and a server to patch).
 - **Constitution impact**: the Additional Constraints line "Intel MacBook Pro 8 GB runs Jenkins and SonarQube only" no longer matches, and the Air's line gains the Jenkins controller. Done as a MINOR amendment, 1.1.0 → 1.2.0, recorded in ADR-0008 (T106).
 
+## R16. Keycloak's database
+
+- **Decision**: Keycloak stores its data in its own CloudNativePG `Cluster`, `keycloak-db`, in the `keycloak` namespace: one instance, a `keycloak` database, continuous WAL archiving and a daily `ScheduledBackup` through the Barman Cloud Plugin, like the service databases (R10, R14). Its `ObjectStore` writes to the prod MinIO's `backups` bucket under the prefix `keycloak/`. The restore mode committed in `gitops/platform/postgres/` (T076) selects `bootstrap.recovery` for `keycloak-db` as well, so the rebuild drill restores accounts with the orders that reference them. Realms are imported from JSON with the strategy `IGNORE_EXISTING`, so a restored database is never overwritten by the import.
+- **Rationale**: without a persistent database Keycloak keeps users only for the life of its pod, so accounts would vanish on stop and start (FR-024) and on every rebuild, and every `buyer_sub`, `seller_sub` and `account_sub` in the service databases would point at nobody. FR-023 asks for the data stores to be backed up and restored; Keycloak's is one of them.
+- **Cost**: about 0.25 GB for one more Postgres instance. The memory budget in the plan is updated.
+- **Alternatives considered**: a `keycloak` database inside the `sv-prod` `Cluster` (no extra instance, but the shared identity store would live inside one environment's database and be restored with prod only); Keycloak's built-in dev storage on a persistent volume (not supported for production use, and outside the backup and restore path); a MinIO in the `keycloak` namespace (another 0.2 GB for one small archive).
+
 ---
 
 ## Plan changes from this research
@@ -134,7 +141,8 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R10 | Barman Cloud Plugin and cert-manager; memory row updated |
 | R14 | `make down` only checks that WAL archiving is current; it creates no `Backup` |
 | R15 | Jenkins controller on the Air, as its own standard account `ricomillz`, bound to loopback, building `main` only; SonarQube Cloud for code quality; the Intel Mac leaves the lab |
+| R16 | Keycloak's database is its own CloudNativePG `Cluster` in the `keycloak` namespace, archived to the prod MinIO and restored in the drill; memory row updated |
 
 ## Tasks
 
-These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084; the Jenkins controller, its Air setup, SonarQube Cloud and the constitution amendment are T103–T106.
+These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084; the Jenkins controller, its Air setup, SonarQube Cloud and the constitution amendment are T103–T106; Keycloak's database is T021, T025 and T076.

@@ -11,7 +11,7 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 
 **Language/Version**: Python 3.12 (FastAPI services, BFF, traffic generator); Java 21 (Spring Boot 3 Listings service); HCL (Terraform 1.9+)
 **Primary Dependencies**: FastAPI, SQLAlchemy 2, Jinja2 + HTMX (BFF pages), Spring Boot 3 (Web, Data JPA), Stripe SDK, OpenTelemetry SDKs and auto-instrumentation, Keycloak (OIDC), RabbitMQ client (aio-pika), Locust (traffic)
-**Storage**: PostgreSQL via the CloudNativePG operator, one cluster per environment with a database per service, backups to MinIO; MinIO for photos; RabbitMQ for events
+**Storage**: PostgreSQL via the CloudNativePG operator, one cluster per environment with a database per service, plus one cluster for Keycloak (research R16), backups to MinIO; MinIO for photos; RabbitMQ for events
 **Testing**: pytest + httpx, JUnit 5 + Testcontainers, contract tests on service APIs, k6 or Locust for SC-002 and SC-003, `verify_sprintN.sh` per sprint
 **Target Platform**: single-node Kind on Docker Desktop on a Mac mini M4, linux/arm64 images; ingress bound to the mini's loopback and reached over an SSH tunnel from the MacBook Air until Tailscale is installed (research R1, R2)
 **Project Type**: Web application, multi-service, across three repositories
@@ -35,7 +35,7 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 | Search | Postgres full-text search in Listings | Avoids a search engine on a 16 GB host |
 | Events | RabbitMQ topic exchange `orders`; quorum queue per consumer; dead-letter queue after 5 attempts | FR-016, FR-017 |
 | Environment generation | Argo CD ApplicationSet with a Git directory generator over `services/*/overlays/*` | FR-025; adding a folder adds an environment |
-| Databases | CloudNativePG `Cluster` per namespace; scheduled and on-demand backups to MinIO through the Barman Cloud Plugin (needs cert-manager) | Constitution VIII; declarative backups replace scripts; the in-tree backup support is deprecated (research R10); chosen over Crossplane (ADR-0005, not yet written) |
+| Databases | CloudNativePG `Cluster` per namespace, and `keycloak-db` in the `keycloak` namespace (research R16); scheduled and on-demand backups to MinIO through the Barman Cloud Plugin (needs cert-manager) | Constitution VIII; declarative backups replace scripts; the in-tree backup support is deprecated (research R10); chosen over Crossplane (ADR-0005, not yet written) |
 | Backup durability | MinIO's volume is a Kind `extraMount` on the mini's disk, outside the cluster lifecycle | Backups survive the rebuild drill |
 | Policy | Kyverno in the cluster (enforce) and `kyverno apply` in the GitOps repo's CI on every PR, same policy files | Constitution III; FR-027 |
 | Service template | Copier template in `app/templates/service-fastapi` with OTel, health, metrics, Dockerfile, kustomize base | FR-026 |
@@ -54,12 +54,12 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 | Prometheus, Grafana, Alertmanager, node exporter | 1.5 GB |
 | Loki and Tempo (single-binary mode) | 0.8 GB |
 | Keycloak | 0.7 GB |
-| Postgres x2 (CloudNativePG) and its operator, RabbitMQ x2, MinIO | 1.7 GB |
+| Postgres x3 (CloudNativePG: dev, prod, Keycloak) and its operator, RabbitMQ x2, MinIO | 1.95 GB |
 | Kyverno (admission and background controllers) | 0.4 GB |
 | cert-manager and the Barman Cloud Plugin | 0.15 GB |
 | Services x2 environments (Listings JVM 0.4 GB, others 0.15 GB) | 2.0 GB |
 | Ingress, Stripe forwarders, traffic generator | 0.4 GB |
-| **Total** | **about 9.2 GB of 12 GB** |
+| **Total** | **about 9.5 GB of 12 GB** |
 
 If the measured total exceeds 11 GB, dev services scale to zero when not in use before anything else is cut.
 
@@ -144,7 +144,7 @@ sorted-vintage-gitops/
 | --- | --- | --- |
 | Jenkins agent on the mini holds cluster credentials (Principle I); widened 2026-10-30 | Something has to create, destroy and rebuild the cluster and install Argo CD and the bootstrap Secrets. `infra-terraform` does this on apply, destroy and the rebuild drill (destroy, apply, restore), and reads the cluster for health waits and the sprint's `verify_sprintN.sh`, which uses only reads and server-side dry runs. `make up` and `make down` on the mini start or stop the node container and only read the cluster | Hand-installing Argo CD violates Principle II; giving GitHub Actions the kubeconfig would put it on hosted runners. Limits: the `lab` agent on the mini only, the `main` branch of `sorted-vintage-infra` only, every apply and destroy behind a manual approval, and no writes to anything Argo CD manages |
 | Terraform creates the bootstrap Secrets and their namespaces `sv-dev`, `sv-prod` and `ingress-nginx` (Principle VIII); accepted 2026-10-30 | The Stripe keys, webhook signing secrets, database passwords and the mkcert TLS certificate must exist before Argo CD syncs the apps that read them, and there is no secret store yet | Committing them to Git breaks Principle VI. Argo CD does not manage these Secrets, so Terraform and Argo CD never write the same object. Ends when a secret store reconciled by Argo CD (SOPS or Sealed Secrets) replaces them, a later follow-up |
-| Shared Keycloak for both environments | Saves about 0.7 GB | Separate realms keep users and data independent, which satisfies FR-019 |
+| Shared Keycloak for both environments | Saves about 0.7 GB | Separate realms keep users and data independent, which satisfies FR-019. Its database `keycloak-db` is shared too and is restored with both environments (research R16) |
 | CloudNativePG instead of Crossplane for databases | Declarative Postgres with backups, about 0.1 GB | Crossplane adds a composition layer with no cloud API to call locally; it fits the Project 6 self-service layer instead |
 | Stripe CLI forwarder in the cluster | Webhooks cannot reach a lab with no public ingress | A public tunnel would open the lab to the internet (Principle VI) |
 | Lab reached over SSH on the home network instead of Tailscale (Principle VI); accepted 2026-10-29 | Tailscale was deferred in Sprint 0 after the client misbehaved | Waiting for Tailscale blocks Sprint 1. Exposure is limited by binding ingress to loopback and allowing key-only SSH; ends when the Sprint 0 Tailscale follow-up is done, or the constitution is amended by ADR |

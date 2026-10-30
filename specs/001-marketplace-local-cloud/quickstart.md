@@ -119,7 +119,7 @@ make destroy
 make rebuild
 ```
 
-**Expected**: with the restore mode committed as `recovery` in `gitops/platform/postgres/` (T076), the rebuilt databases hold the orders from before `destroy`, restored from MinIO, whose volume lives outside the cluster.
+**Expected**: with the restore mode committed as `recovery` in `gitops/platform/postgres/` (T076), the rebuilt databases, including Keycloak's, so the accounts that placed those orders can still sign in, hold the orders from before `destroy`, restored from MinIO, whose volume lives outside the cluster.
 
 ## 12. Traffic runs all session (User Story 6)
 

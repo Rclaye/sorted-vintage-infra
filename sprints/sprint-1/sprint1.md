@@ -160,7 +160,7 @@ Story: As the platform owner, I want the sprint's claims checked by a script and
 
 Implementation Requirements:
 - T031 `sprints/sprint-1/verify_sprint1.sh` (in this folder), run from the Air.
-- T032 Measure real memory use with `docker stats` and `kubectl top` against the plan's estimate (about 9.2 GB of 12 GB) and record it in `sprints/sprint-1/sprint1_retro.md`. Above 11 GB, scale dev services to zero when idle before cutting anything else.
+- T032 Measure real memory use with `docker stats` and `kubectl top` against the plan's estimate (about 9.5 GB of 12 GB) and record it in `sprints/sprint-1/sprint1_retro.md`. Above 11 GB, scale dev services to zero when idle before cutting anything else.
 
 Acceptance Criteria Verification:
 - `verify_sprint1.sh` passes.
