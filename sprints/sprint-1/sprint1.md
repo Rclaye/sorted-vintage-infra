@@ -6,7 +6,7 @@ Source: specs/001-marketplace-local-cloud/tasks.md, Phases 1–2, T080 and T103�
 
 1. Executive Summary & Sprint 1 Objective
 
-Sprint 1 builds the platform every user story runs on. Terraform creates a single-node Kind cluster on the Mac mini and installs Argo CD. From then on, Argo CD installs everything else from `sorted-vintage-gitops`: ingress, observability, Postgres with continuous backups, RabbitMQ, MinIO, Mailpit, Keycloak and Kyverno. A Copier template produces services that meet the constitution from their first commit, and a stub BFF generated from it travels the full delivery path: GitHub Actions build, a tag commit to Git, Argo CD sync in dev, and a gated promotion to prod. Jenkins runs on the Intel Mac behind a tunnel that opens no port on the home network, and SonarQube Cloud checks code quality on every pull request. The sprint ends with `make up` and `make down` for working sessions, and a measured memory budget.
+Sprint 1 builds the platform every user story runs on. Terraform creates a single-node Kind cluster on the Mac mini and installs Argo CD. From then on, Argo CD installs everything else from `sorted-vintage-gitops`: ingress, observability, Postgres with continuous backups, RabbitMQ, MinIO, Mailpit, Keycloak and Kyverno. A Copier template produces services that meet the constitution from their first commit, and a stub BFF generated from it travels the full delivery path: GitHub Actions build, a tag commit to Git, Argo CD sync in dev, and a gated promotion to prod. Jenkins runs on the MacBook Air, bound to loopback, with its build agent on the mini, and SonarQube Cloud checks code quality on every pull request. The sprint ends with `make up` and `make down` for working sessions, and a measured memory budget.
 
 Sprint Objective
 One `make rebuild` on the mini ends with every Argo CD Application `Synced` and `Healthy`, Kyverno rejecting non-compliant workloads, and the stub BFF answering `https://dev.sortedvtg.lan:8443/healthz` from the MacBook Air through the SSH tunnel.
@@ -15,28 +15,26 @@ Decisions carried in (accepted 2026-10-29, see plan.md Complexity Tracking)
 - Single-node Kind (research R1). The T008 spike confirms it survives stop and start before any Terraform is written.
 - No Tailscale yet (research R2). Ingress binds to the mini's loopback address; the Air reaches it with `ssh -N -L 8443:127.0.0.1:443 mac-mini`.
 - Session-end backups write nothing to the cluster (research R14). WAL archiving runs continuously; `make down` only checks that it is current.
-- Jenkins and the Intel Mac are reached only through the lab tunnel, and code quality uses SonarQube Cloud's free plan (research R15).
+- The lab is two machines (research R15). The Jenkins controller runs on the Air, bound to `127.0.0.1:8080`; the Intel MacBook Pro is no longer used. Code quality uses SonarQube Cloud's free plan.
 
 2. Lab Topology After Sprint 1
 
-   ┌──────────────────────────────┐  ssh -N mac-mini                ┌──────────────────────────────────────────────────────────┐
-   │  MacBook Air M4 (16 GB)      │  -L 8443 → 127.0.0.1:443        │  Mac mini M4 (16 GB), Docker Desktop (12 GB)             │
-   │  https://*.sortedvtg.lan:8443├────────────────────────────────►│  Kind node "sorted-vintage" (80/443 on 127.0.0.1 only)   │
-   │  http://localhost:8081       │  -L 8081 → 127.0.0.1:8081       │   argocd · ingress-nginx · cert-manager · kyverno        │
-   │  ssh intel-mac (ProxyJump)   │                                 │   prometheus · grafana · loki · tempo · otel-collector   │
-   └──────────────┬───────────────┘                                 │   keycloak (realms sv-dev, sv-prod)                      │
-                  │ git push                                        │   sv-dev / sv-prod: postgres · rabbitmq · minio ·        │
-                  │                                                 │                     mailpit · bff (stub)                 │
-                  │                                                 │  ~/sv-data (extraMount): MinIO data and backups          │
-                  │                                                 │  127.0.0.1:8081, :2222 ◄── lab tunnel (reverse ssh)      │
-                  │                                                 └──────▲──────────────────────────▲────────────┬───────────┘
-                  │                                                        │ Argo CD pulls            │ ssh -R     │ ssh (agent launch)
-                  │                                                        │                          │ outbound   ▼
-   ┌──────────────▼────────────────────────────────────────────────────────┴───────┐        ┌────────┴──────────────────────────┐
-   │  GitHub: infra · app (Actions → Trivy → SonarQube Cloud → GHCR, tag commit)   │        │  MacBook Pro Intel (8 GB)         │
-   │          gitops (policy CI, prod-gate)          ▲ Jenkins polls every 5 min   ├───────►│  Jenkins controller 127.0.0.1:8080│
-   └────────────────────────────────────────────────┴──────────────────────────────┘        │  firewall: block all incoming     │
-                                                                                            └───────────────────────────────────┘
+   ┌───────────────────────────────────┐  ssh -N -L 8443:127.0.0.1:443   ┌──────────────────────────────────────────────────────────┐
+   │  MacBook Air M4 (16 GB)           ├────────────────────────────────►│  Mac mini M4 (16 GB), Docker Desktop (12 GB)             │
+   │  Browser → *.sortedvtg.lan:8443   │                                 │  Kind node "sorted-vintage" (80/443 on 127.0.0.1 only)   │
+   │  /etc/hosts → 127.0.0.1           │  ssh (key sv_jenkins_agent)     │   argocd · ingress-nginx · cert-manager · kyverno        │
+   │  Jenkins controller               ├────────────────────────────────►│   prometheus · grafana · loki · tempo · otel-collector   │
+   │    127.0.0.1:8080, no executors   │  starts the agent               │   keycloak (realms sv-dev, sv-prod)                      │
+   └──────┬──────────────────▲─────────┘                                 │   sv-dev / sv-prod: postgres · rabbitmq · minio ·        │
+          │ git push         │ Jenkins polls Git every 5 min             │                     mailpit · bff (stub)                 │
+          │                  │                                           │  Jenkins agent (label lab): terraform, kind, docker      │
+          │                  │                                           │  ~/sv-data (extraMount): MinIO data and backups          │
+          │                  │                                           └───────────────▲──────────────────────────────────────────┘
+          │                  │                                                           │ Argo CD pulls
+   ┌──────▼──────────────────┴───────────────────────────────────────────────────────────┴──────┐
+   │  GitHub: infra · app (Actions → Trivy → SonarQube Cloud → GHCR, tag commit)                │
+   │          gitops (policy CI, prod-gate)                                                     │
+   └────────────────────────────────────────────────────────────────────────────────────────────┘
 
 3. Actionable Engineering Tickets & Implementation Specs
 
@@ -134,25 +132,23 @@ Acceptance Criteria Verification:
 - `make down` then `make up` returns every app to `Healthy` in under 10 minutes, and the Grafana history from before the stop is still there.
 - `make down` makes no change to cluster state: after one run and `make up`, `kubectl get backups.postgresql.cnpg.io -A` lists only scheduled backups, and Argo CD shows no Application out of sync.
 
-Ticket 1.7 — Jenkins Behind the Lab Tunnel, and SonarQube Cloud (T104, T103, T014, T105, T106)
+Ticket 1.7 — Jenkins on the Air, and SonarQube Cloud (T104, T103, T014, T105, T106)
 Owner: Platform / Security Engineer
-Story: As the platform owner, I want to see the infrastructure pipeline and code-quality results in a browser without opening any port on my home network, so that CI is visible and the lab stays closed (Principles III and VI).
+Story: As the platform owner, I want to see the infrastructure pipeline and code-quality results in a browser without a third machine or any port open on my home network, so that CI is visible and the lab stays simple and closed (Principles III and VI).
 
 Implementation Requirements:
-- T104 The lab tunnel, following `docs/runbooks/intel-mac-jenkins.md`:
-    - On the Intel Mac, run `scripts/lab-tunnel/intel-mac-setup.sh`. It installs `jenkins-lts` bound to `127.0.0.1:8080`, creates the tunnel key, and starts a LaunchAgent holding `ssh -N -R 127.0.0.1:8081:127.0.0.1:8080 -R 127.0.0.1:2222:127.0.0.1:22` to the mini.
-    - On the mini, run `scripts/lab-tunnel/authorize-tunnel-key.sh` with the printed public key. The key can open those two listens and nothing else: no shell, no commands, no other forwards.
-    - On the Intel Mac, turn on the firewall with "Block all incoming connections", and automatic login for the Jenkins user.
-    - On the Air, add the `LocalForward 8081` line and the `intel-mac` `ProxyJump` entry to `~/.ssh/config`.
-- T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mac-mini` agent (label `lab`, launched over SSH outbound from the Intel Mac, so no agent port is opened), zero executors on the controller, and the `infra-terraform` job polling Git every 5 minutes (GitHub cannot reach Jenkins). No secrets in either file.
+- T104 Jenkins on the Air, following `docs/runbooks/jenkins.md`:
+    - On the Air, run `scripts/jenkins/air-setup.sh`. It installs `jenkins-lts` behind a LaunchAgent bound to `127.0.0.1:8080` that does not start at login, and creates the agent key `~/.ssh/sv_jenkins_agent`.
+    - On the mini, run `scripts/jenkins/authorize-agent-key.sh` with the printed public key. The key is `restrict`ed: it can run the agent but gets no forwarding and no pty.
+    - Add `openjdk@21` to `scripts/Brewfile` for the mini's agent.
+- T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mini-agent-ssh` credential (read from the key file, never committed), the `mac-mini` agent (label `lab`, launched over SSH, so no agent port is opened), zero executors on the controller, and the `infra-terraform` job polling Git every 5 minutes (GitHub cannot reach Jenkins).
 - T014 `jenkins/Jenkinsfile` on agent `lab`: fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval.
 - T105 SonarQube Cloud free plan: organization `rclaye` bound to GitHub, the SonarQube Cloud GitHub App on `sorted-vintage-app`, automatic analysis off, project `rclaye_sv-bff`, `sonar-project.properties` in the BFF and the template, and a `sonar` step in `build.yml` after tests. You create `SONAR_TOKEN` in SonarQube Cloud and add it as a repository secret yourself. If the scan action does not run on `ubuntu-24.04-arm`, run only the scan job on `ubuntu-24.04`.
-- T106 ADR-0008 (Jenkins behind the lab tunnel; SonarQube Cloud instead of self-hosted) and a PATCH amendment to the constitution's hardware line (1.1.0 → 1.1.1).
+- T106 ADR-0008 (Jenkins on the Air; SonarQube Cloud instead of self-hosted; the lab drops to two machines) and a PATCH amendment to the constitution's hardware lines (1.1.0 → 1.1.1).
 
 Acceptance Criteria Verification:
-- From the mini, `nc -z` to the Intel Mac's ports 22 and 8080 on the LAN fails; ports 8081 and 2222 on the mini listen on `127.0.0.1` only.
-- From the Air, with `ssh -N mac-mini` running, `http://localhost:8081` shows Jenkins and `ssh intel-mac` opens a shell.
-- An `infra-terraform` run shows plan, a paused approval, and apply, executed on the `lab` agent.
+- On the Air, `lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, and `http://localhost:8080` shows Jenkins.
+- The `mac-mini` agent is online in Jenkins, and an `infra-terraform` run shows plan, a paused approval, and apply on it.
 - A pull request to `sorted-vintage-app` shows the SonarQube Cloud quality gate.
 
 Ticket 1.8 — Verify and Measure (T031, T032)
@@ -169,7 +165,7 @@ Acceptance Criteria Verification:
 
 4. Sprint Verification
 
-Run `sprints/sprint-1/verify_sprint1.sh` from the MacBook Air with the lab up. It runs on the Air and over SSH on the mini and makes no change to the cluster. It checks the mini's toolchain, the single node and its loopback-only ingress binding, Jenkins through the lab tunnel (and, when `INTEL_LAN_HOST` is set, that the Intel Mac's ports are closed on the LAN), the SonarQube Cloud check on the app repository, Argo CD health, the BFF in both environments, policy rejection with server-side dry runs, WAL archiving, an empty Terraform plan, the `prod` environment's required reviewer, and that no tfvars file is tracked. It exits non-zero on the first failure.
+Run `sprints/sprint-1/verify_sprint1.sh` from the MacBook Air with the lab up. It runs on the Air and over SSH on the mini and makes no change to the cluster. It checks the mini's toolchain, the single node and its loopback-only ingress binding, Jenkins on the Air bound to loopback, the Jenkins agent key reaching Java on the mini, the SonarQube Cloud check on the app repository, Argo CD health, the BFF in both environments, policy rejection with server-side dry runs, WAL archiving, an empty Terraform plan, the `prod` environment's required reviewer, and that no tfvars file is tracked. It exits non-zero on the first failure.
 
 5. Out of Scope for Sprint 1
 

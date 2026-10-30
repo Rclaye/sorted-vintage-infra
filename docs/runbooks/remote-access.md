@@ -12,18 +12,13 @@ If this hangs, check that the mini is awake; away from home, check that both mac
 
 ## Reach web UIs in the lab
 
-From Sprint 1, one connection carries everything:
+From Sprint 1, one connection carries the cluster's web UIs:
 
 ```bash
-ssh -N mac-mini
+ssh -N -L 8443:127.0.0.1:443 mac-mini
 ```
 
-With the `LocalForward` lines from [intel-mac-jenkins.md](./intel-mac-jenkins.md#one-time-setup) in `~/.ssh/config`, this forwards:
-
-- the cluster's ingress, at `https://<host>.sortedvtg.lan:8443` (Argo CD, Grafana, Mailpit and the marketplace; see [lab-session.md](./lab-session.md));
-- Jenkins on the Intel Mac, at `http://localhost:8081`, through the lab tunnel.
-
-`ssh intel-mac` opens a shell on the Intel Mac through the same tunnel. The Intel Mac has no port open on the home network.
+Argo CD, Grafana, Mailpit and the marketplace are then at `https://<host>.sortedvtg.lan:8443` (see [lab-session.md](./lab-session.md)). Jenkins runs on the Air itself, at `http://localhost:8080` ([jenkins.md](./jenkins.md)).
 
 Editors: VS Code's Remote-SSH extension connects to `mac-mini` and works on the mini's files directly.
 

@@ -108,16 +108,16 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 ## R15. CI hosts and how they are reached
 
 - **Decision**:
-  - **Jenkins controller** on the Intel MacBook Pro, installed with Homebrew `jenkins-lts` and run by a LaunchAgent bound to `127.0.0.1:8080`. Its configuration (plugins, the mini agent, jobs) is code in `infra/jenkins/` (Configuration as Code).
-  - **Lab tunnel**: the Intel Mac keeps one outbound SSH connection to the Mac mini with two remote forwards, `127.0.0.1:8081 → Jenkins` and `127.0.0.1:2222 → the Intel Mac's sshd`. The macOS firewall on the Intel Mac blocks all incoming connections, so nothing on it is reachable from the home network. The Air reaches Jenkins with a `LocalForward` on its existing `mac-mini` connection and gets a shell with `ProxyJump` ([intel-mac-jenkins.md](../../docs/runbooks/intel-mac-jenkins.md)).
-  - **Mini agent**: launched by the controller over SSH, outbound from the Intel Mac to the mini's existing SSH. There is no inbound agent port (50000). GitHub cannot reach Jenkins, so jobs poll Git every 5 minutes.
-  - **Code quality**: SonarQube Cloud's free plan, CI-based analysis from the app repository's GitHub Actions, one SonarQube Cloud project per service in the monorepo, and the quality gate reported on each pull request by the SonarQube Cloud GitHub App. It replaces a self-hosted SonarQube on the Intel Mac.
-- **Rationale**: Principle VI says no port is opened for the lab, and Tailscale is deferred (R2). A reverse tunnel opens no new listener anywhere: it reuses the mini's key-only SSH, which is already the accepted way in. The tunnel key is restricted on the mini to those two listens, with no shell and no other forwards. SonarQube Cloud is free for public repositories and adds pull request decoration. It also takes about 2 GB of Elasticsearch and Postgres off an 8 GB machine, which leaves the Intel Mac for Jenkins alone.
-- **Cost**: $0. The free plan covers public repositories; the app repository is public.
-- **Spike (Sprint 1, T104)**: confirm that with "Block all incoming connections" on, `nc -z` from the mini to the Intel Mac's ports 22 and 8080 fails, and that the reverse-tunnelled loopback connection to its sshd still works.
+  - **Jenkins controller** on the MacBook Air, installed with Homebrew `jenkins-lts` and run by a LaunchAgent bound to `127.0.0.1:8080`, started and stopped by hand with the lab session. Its configuration (plugins, the mini agent, jobs) is code in `infra/jenkins/` (Configuration as Code).
+  - **Mini agent**: the controller starts it over SSH with a dedicated key (`~/.ssh/sv_jenkins_agent`), using the Air's existing SSH access to the mini. On the mini the key is `restrict`ed: commands only, no forwarding and no pty. There is no inbound agent port (50000). GitHub cannot reach Jenkins, so jobs poll Git every 5 minutes.
+  - **Code quality**: SonarQube Cloud's free plan, CI-based analysis from the app repository's GitHub Actions, one SonarQube Cloud project per service in the monorepo, and the quality gate reported on each pull request by the SonarQube Cloud GitHub App.
+  - **The Intel MacBook Pro leaves the lab.** The platform runs on two machines: the mini (cluster and build agent) and the Air (workstation and Jenkins controller).
+- **Rationale**: the Air is on whenever a lab session runs, because sessions are driven from it, so Jenkins is available exactly when there is a cluster to change. Binding to loopback means nothing listens on the home network (Principle VI) without a tunnel or a firewall change. The controller with zero executors needs about 0.5–1 GB, which fits next to the Air's other work, and stopping it between sessions frees that memory. SonarQube Cloud is free for public repositories, adds pull request decoration, and needs no machine.
+- **Cost**: $0.
+- **Trade-offs accepted**: the Air is a personal laptop, so it now holds the agent key and the Jenkins credentials store; neither gives access to the cluster, whose credentials stay on the mini. Memory is tighter when a local model runs at the same time; stop Jenkins first if needed.
 - **Spike (Sprint 1, T105)**: confirm the SonarQube scan action runs on `ubuntu-24.04-arm`. If it does not, run only the scan job on `ubuntu-24.04`; analysis produces no image, so the arm64 rule for runtime images is unaffected.
-- **Alternatives considered**: Jenkins on `0.0.0.0` with key-only SSH on the Intel Mac (opens two listeners on the home network); Tailscale (deferred, R2); a Jenkins inbound agent (needs port 50000 on the controller); self-hosted SonarQube (about 2 GB on an 8 GB machine, and a server to patch); SonarQube Cloud's automatic analysis (not available for monorepos with several projects).
-- **Constitution impact**: the Additional Constraints line "Intel MacBook Pro 8 GB runs Jenkins and SonarQube only" no longer matches. It needs a PATCH amendment with an ADR (T106).
+- **Alternatives considered**: Jenkins on the Intel Mac (needs a third machine on all session, and a reverse SSH tunnel plus firewall rules to stay closed to the home network; tried and dropped on 2026-10-30); Jenkins on the mini (competes with the cluster for the 4 GB left outside Docker); a GitHub Actions self-hosted runner on the mini instead of Jenkins (simpler, but removes the Jenkins-versus-Actions comparison the program plans to publish); self-hosted SonarQube (about 2 GB and a server to patch).
+- **Constitution impact**: the Additional Constraints line "Intel MacBook Pro 8 GB runs Jenkins and SonarQube only" no longer matches, and the Air's line gains the Jenkins controller. This needs a PATCH amendment with an ADR (T106).
 
 ---
 
@@ -131,8 +131,8 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R5, R8 | Reconciliation loop, inbox and outbox added to key design decisions |
 | R10 | Barman Cloud Plugin and cert-manager; memory row updated |
 | R14 | `make down` only checks that WAL archiving is current; it creates no `Backup` |
-| R15 | Jenkins controller on loopback behind the lab tunnel; SonarQube Cloud for code quality |
+| R15 | Jenkins controller on the Air, bound to loopback; SonarQube Cloud for code quality; the Intel Mac leaves the lab |
 
 ## Tasks
 
-These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084; the Jenkins controller, lab tunnel, SonarQube Cloud and the constitution amendment are T103–T106.
+These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084; the Jenkins controller, its Air setup, SonarQube Cloud and the constitution amendment are T103–T106.

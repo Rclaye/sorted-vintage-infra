@@ -4,7 +4,6 @@
 #   SV_ROOT     folder holding the three clones on the Air (default: ~/Sorted-Vintage/src)
 #   SV_OWNER    GitHub owner (default: the logged-in gh user)
 #   MINI        ssh host for the Mac mini (default: mac-mini)
-#   INTEL_LAN_HOST  the Intel Mac's LAN name, e.g. my-macbook-pro.local (optional; enables the closed-port checks)
 #   MINI_INFRA  sorted-vintage-infra clone on the mini (default: $HOME/Sorted-Vintage/src/sorted-vintage-infra on the mini)
 set -euo pipefail
 
@@ -22,7 +21,7 @@ remote() { ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" "export PATH=/opt/ho
 k() { remote "kubectl --context kind-$CLUSTER $1"; }
 
 echo "Workstation"
-for t in gh ssh; do command -v "$t" >/dev/null 2>&1 && pass "tool: $t" || fail "tool missing: $t"; done
+for t in gh ssh curl lsof; do command -v "$t" >/dev/null 2>&1 && pass "tool: $t" || fail "tool missing: $t"; done
 SV_OWNER="${SV_OWNER:-$(gh api user --jq .login)}"
 [[ -d "$G/.git" ]] || fail "no gitops clone at $G"
 
@@ -86,24 +85,16 @@ gh api "repos/$SV_OWNER/sorted-vintage-gitops/environments/prod" \
   && pass "gitops environment prod has a required reviewer" || fail "gitops environment prod is missing or has no required reviewer"
 [[ -f "$G/.github/workflows/prod-gate.yml" ]] && pass "prod-gate workflow present" || fail "missing .github/workflows/prod-gate.yml in gitops"
 
-echo "Jenkins and the lab tunnel (Ticket 1.7, research R15)"
-for p in 8081 2222; do
-  addrs="$(remote "lsof -nP -iTCP:$p -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print \$9}'" | sort -u)"
-  [[ -n "$addrs" ]] || fail "nothing listening on the mini's port $p (is the lab tunnel up?)"
-  grep -qv '^127\.0\.0\.1:' <<<"$addrs" && fail "mini port $p listens beyond loopback: $(tr '\n' ' ' <<<"$addrs")"
-  pass "mini port $p listens on 127.0.0.1 only"
-done
-code="$(remote "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/login" || true)"
-[[ "$code" == 200 ]] && pass "Jenkins answers through the tunnel" || fail "Jenkins through the tunnel returned '$code'"
-ssh -o BatchMode=yes -o ConnectTimeout=8 intel-mac true 2>/dev/null && pass "ssh intel-mac through the tunnel" || fail "ssh intel-mac failed (see docs/runbooks/intel-mac-jenkins.md)"
-if [[ -n "${INTEL_LAN_HOST:-}" ]]; then
-  for p in 22 8080; do
-    if remote "nc -z -G 2 $INTEL_LAN_HOST $p" >/dev/null 2>&1; then fail "$INTEL_LAN_HOST:$p is reachable on the home network"
-    else pass "$INTEL_LAN_HOST:$p closed on the home network"; fi
-  done
-else
-  skip "set INTEL_LAN_HOST to check the Intel Mac's ports are closed on the LAN"
-fi
+echo "Jenkins (Ticket 1.7, research R15)"
+addrs="$(lsof -nP -iTCP:8080 -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $9}' | sort -u)"
+[[ -n "$addrs" ]] || fail "Jenkins is not listening on the Air (launchctl kickstart gui/$(id -u)/com.sortedvintage.jenkins)"
+grep -qv '^127\.0\.0\.1:' <<<"$addrs" && fail "port 8080 on the Air listens beyond loopback: $(tr '\n' ' ' <<<"$addrs")"
+pass "Jenkins listens on 127.0.0.1:8080 only"
+code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/login || true)"
+[[ "$code" == 200 ]] && pass "Jenkins answers at localhost:8080" || fail "Jenkins returned '$code'"
+ssh -o BatchMode=yes -o ConnectTimeout=8 -o IdentitiesOnly=yes -i "$HOME/.ssh/sv_jenkins_agent" "$MINI" \
+  "export PATH=/opt/homebrew/bin:/opt/homebrew/opt/openjdk@21/bin:\$PATH; java -version" >/dev/null 2>&1 \
+  && pass "agent key reaches Java on the mini" || fail "agent key cannot run java on $MINI (see docs/runbooks/jenkins.md)"
 
 echo "SonarQube Cloud (T105)"
 gh api "repos/$SV_OWNER/sorted-vintage-app/commits/main/check-runs" --jq '.check_runs[].name' 2>/dev/null | grep -qi sonar \
