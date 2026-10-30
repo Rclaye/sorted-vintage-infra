@@ -110,7 +110,7 @@ make down
 make up
 ```
 
-**Expected**: `make down` completes a CloudNativePG backup in each namespace before it stops the node. With the mini powered on, `make up` returns every app to `Healthy` in under 10 minutes. The orders from step 3 and the previous session's dashboard history are still there. A payment completed while the lab was down is applied by Payments reconciliation within 5 minutes of start ([research R5](./research.md#r5-events-missed-while-the-lab-is-off)).
+**Expected**: `make down` confirms each database's WAL archive is less than 2 minutes old, writes nothing to the cluster, and then stops the node. With the mini powered on, `make up` returns every app to `Healthy` in under 10 minutes. The orders from step 3 and the previous session's dashboard history are still there. A payment completed while the lab was down is applied by Payments reconciliation within 5 minutes of start ([research R5](./research.md#r5-events-missed-while-the-lab-is-off)).
 
 ## 11. Restore during the drill (FR-023)
 

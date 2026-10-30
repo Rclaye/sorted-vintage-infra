@@ -40,7 +40,7 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 | Policy | Kyverno in the cluster (enforce) and `kyverno apply` in the GitOps repo's CI on every PR, same policy files | Constitution III; FR-027 |
 | Service template | Copier template in `app/templates/service-fastapi` with OTel, health, metrics, Dockerfile, kustomize base | FR-026 |
 | Environments | `sv-dev` and `sv-prod` namespaces; shared platform add-ons in their own namespaces | Clarification 2026-10-29 |
-| Sessions | `make up` starts the Kind node containers and waits for Argo CD health; `make down` creates CloudNativePG `Backup` resources, waits for them, then stops the nodes. Data and telemetry live on persistent volumes | Clarification 2026-10-29; FR-024 |
+| Sessions | `make up` starts the Kind node container and waits for Argo CD health; `make down` checks, read-only, that each database's WAL archive is current, then stops the node. Continuous WAL archiving (`archive_timeout` 60 s) and a daily `ScheduledBackup` are declared in Git, so nothing is written to the cluster at session end (research R14). Data and telemetry live on persistent volumes | Clarification 2026-10-29; FR-024 |
 | Images | GitHub Actions on `ubuntu-24.04-arm`, Trivy, push to GHCR, tag commit to GitOps repo | Constitution I; Intel Mac stays out of the build path |
 | Infra pipeline | Jenkins controller on the Intel Mac, agent on the mini, plan → approval → apply | Constitution III; reuses the existing Jenkinsfile stages |
 
@@ -81,7 +81,7 @@ If the measured total exceeds 11 GB, dev services scale to zero when not in use 
 
 Re-run on 2026-10-29 against [research.md](./research.md), [data-model.md](./data-model.md) and [contracts/](./contracts/):
 
-- **I, III, VIII**: still pass. Reconciliation, inbox and outbox change only application data; change events write only to Grafana and Loki; backups are `Backup` resources reconciled by CloudNativePG.
+- **I, III, VIII**: still pass. Reconciliation, inbox and outbox change only application data; change events write only to Grafana and Loki; backups are continuous WAL archiving and `ScheduledBackup` resources declared in Git and reconciled by CloudNativePG; `make down` only reads their status (research R14).
 - **II**: still passes, and gets simpler: a single Kind node survives stop and start without manual repair (research R1).
 - **V**: passes, with one obligation the design adds: the outbox stores `traceparent` so the queued step stays in the checkout trace (research R9).
 - **VI**: deviation unchanged (Tailscale deferred). Every service route needs a JWT except the two Stripe webhook routes, which need a Stripe signature (contracts/README.md).

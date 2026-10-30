@@ -12,14 +12,14 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Rationale**: FR-024 and SC-008 need the cluster to survive `make down` / `make up`, which stops and starts the node containers. Kind's maintainers describe restart as working for single-node clusters but failing for multi-node clusters when Docker assigns the nodes different IPs on restart ([kind#2715](https://github.com/kubernetes-sigs/kind/issues/2715)); the known workarounds patch the kubeadm config by hand, which Principle II forbids. On one physical host, extra Kind nodes add no real fault isolation, and dropping them saves about 0.3 GB.
 - **Alternatives considered**: three nodes with a script that rewrites node IPs after start (manual repair, fragile); three nodes recreated every session (loses PV-backed state unless every volume is an extraMount, and breaks SC-008's 10-minute start); k3d (restart-safe multi-node, but replaces the tool chosen in ADR-0001).
 - **Revisit when**: a Failure Lab scenario needs node failure. Re-test multi-node restart on the Kind version in use then.
-- **Spike (Sprint 1, before T006)**: create the cluster, deploy a PVC-backed pod, `docker stop`/`docker start` the node, confirm the API server, the pod and its data return.
+- **Spike (Sprint 1, T008, before T010)**: create the cluster, deploy a PVC-backed pod, `docker stop`/`docker start` the node, confirm the API server, the pod and its data return.
 
 ## R2. Reaching the lab: ingress ports and Principle VI
 
 - **Decision**: Kind `extraPortMappings` for 80 and 443 with `listenAddress: 127.0.0.1` on the mini. The Air reaches `*.sortedvtg.lan` through an SSH local forward (`ssh -L 8443:127.0.0.1:443 mac-mini`) and `/etc/hosts` entries pointing the names at 127.0.0.1. When Tailscale is installed, `listenAddress` moves to the mini's Tailscale IP.
 - **Rationale**: Principle VI says the lab is reachable only over the private Tailscale network. Tailscale was deferred in Sprint 0, so binding to all interfaces would expose the marketplace to the whole home network. Binding to loopback keeps SSH (key-only) as the only way in until Tailscale is installed, then switches to it.
 - **Alternatives considered**: bind to `0.0.0.0` (exposes the lab on the LAN); install Tailscale first (blocked by the client problems recorded in the Sprint 0 retro).
-- **TLS**: mkcert issues a wildcard certificate for `*.sortedvtg.lan`; the mkcert root CA is trusted on the Air only. The certificate and key enter the cluster as a Secret created by Terraform from a git-ignored file (same path as the Stripe keys, T008).
+- **TLS**: mkcert issues a wildcard certificate for `*.sortedvtg.lan`; the mkcert root CA is trusted on the Air only. The certificate and key enter the cluster as a Secret created by Terraform from a git-ignored file (same path as the Stripe keys, T012).
 
 ## R3. Stripe: one sandbox per environment
 
@@ -77,7 +77,8 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Decision**: use the Barman Cloud Plugin (`ObjectStore` resource, cluster `plugins` section, `Backup` with `method: plugin`) writing to MinIO, rather than the in-tree `spec.backup.barmanObjectStore`. Add cert-manager to `gitops/platform/`, because the plugin needs it.
 - **Rationale**: in-tree Barman Cloud support has been deprecated since CloudNativePG 1.26 and is scheduled for removal ([migration guide](https://cloudnative-pg.io/plugin-barman-cloud/docs/migration/)). The removal version has moved several times, and recent release notes point to 1.31. Starting on the plugin avoids a forced migration mid-program.
 - **Cost**: about 0.15 GB for cert-manager and the plugin. The memory budget in the plan is updated.
-- **Session end**: `make down` creates one `Backup` per cluster with `method: plugin` and waits for `phase: completed` before stopping the node (FR-023). The rebuild drill restores from the latest backup with a `bootstrap.recovery` cluster that references the same `ObjectStore`.
+- **Session end**: no backup is created at the end of a session, because creating a `Backup` from `make down` would be a cluster write outside Argo CD (Principle I). Instead, see R14.
+- **Restore**: the rebuild drill restores with a `bootstrap.recovery` cluster that references the same `ObjectStore`, replaying archived WAL to the latest point available.
 
 ## R11. Change events (FR-021)
 
@@ -96,6 +97,14 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Decision**: user requests carry the user's Keycloak access token from the BFF to each service. Service-to-service calls with no user (Payments worker → Orders, Orders sweeper → Payments) use a Keycloak client-credentials token per service. Each service checks audience and expiry. The two Stripe webhook routes are the only routes without a JWT; they authenticate with the Stripe signature instead.
 - **Rationale**: FR-003 asks that every request be authenticated. The webhook exception is unavoidable and still authenticated, just by a different method.
 
+## R14. Backing up at session end without writing to the cluster
+
+- **Decision**: continuous WAL archiving through the Barman Cloud Plugin, with `archive_timeout` set to 60 seconds in each `Cluster`, plus a daily `ScheduledBackup` with `immediate: true` for the base backup. All of these are declared in Git. `make down` writes nothing to the cluster; it only reads. It waits until each `Cluster` reports continuous archiving as working and its most recent archived WAL is no older than 2 × `archive_timeout`, waits one more `archive_timeout`, then stops the node.
+- **Rationale**: Principle I forbids anyone changing cluster state outside a Git commit applied by Argo CD, and that includes creating a `Backup` from a Makefile. With continuous archiving the data is already in MinIO when the session ends, so the session-end step becomes a read-only check that the archive is current. The recovery point is at most about one minute of writes, all of them synthetic.
+- **Reading of FR-023**: "backed up when a session ends" is met by archiving that is current when the session ends, rather than by a separate backup job. The restore demonstration in the drill is unchanged.
+- **Spike (Sprint 1, during T021)**: confirm where the plugin reports the last archived WAL time (the `Cluster` condition `ContinuousArchiving` and the `ObjectStore` status are the candidates), and that `archive_timeout` can be set in `spec.postgresql.parameters`. Write the field names into T013.
+- **Alternatives considered**: commit a timestamped `Backup` manifest to the GitOps repo from `make down` (meets Principle I, but every session would need a pull request to a protected branch); record a session-end `Backup` as an exception to Principle I (keeps the simplest script, but makes the first exception to the rule the whole program depends on); hourly `ScheduledBackup` only (loses up to an hour of data).
+
 ---
 
 ## Plan changes from this research
@@ -107,7 +116,8 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R3 | One Stripe sandbox per environment |
 | R5, R8 | Reconciliation loop, inbox and outbox added to key design decisions |
 | R10 | Barman Cloud Plugin and cert-manager; memory row updated |
+| R14 | `make down` only checks that WAL archiving is current; it creates no `Backup` |
 
 ## Tasks
 
-These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager and the Barman Cloud Plugin are T017 and T021; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084.
+These decisions are applied in [tasks.md](./tasks.md): the spikes are T008, T009 and T052; the Kind module is T010; the per-environment Stripe and certificate Secrets are T012; cert-manager, the Barman Cloud Plugin and WAL archiving are T017 and T021; the read-only session-end check is T013; reconciliation is T045 and T069; the Orders outbox relay is T065; the trace continuity check is T084.

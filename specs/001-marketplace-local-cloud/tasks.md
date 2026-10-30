@@ -14,7 +14,7 @@
 - Paths are prefixed by repository: `infra/`, `app/`, `gitops/`. Paths under `specs/` are in `infra/`.
 - Field rules quoted in a task come from [data-model.md](./data-model.md); API shapes come from the named contract file.
 
-**Sprint mapping**: Phases 1–2 = Sprint 1 · Phase 3 and Phase 4 up to T079 = Sprint 2 · the rest of Phase 4 through Phase 9 = Sprint 3 · Phase 10 = Gate 1 release
+**Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 and Phase 4 up to T079 = Sprint 2 · the rest of Phase 4 through Phase 9 = Sprint 3 · Phase 10 = Gate 1 release
 
 ---
 
@@ -44,10 +44,10 @@
 
 ### Infrastructure (infra)
 
-- [ ] T010 Write `infra/terraform/modules/kind-cluster/` (one control-plane node that runs workloads; `extraPortMappings` for 80 and 443 with `listenAddress` from variable `ingress_listen_address`, default `"127.0.0.1"`; an `extraMounts` entry mapping host path variable `lab_data_dir` to `/var/lab-data` for MinIO) and `infra/terraform/cluster/main.tf` using it with the `tehcyx/kind` provider
+- [ ] T010 Write `infra/terraform/modules/kind-cluster/` (cluster name `sorted-vintage`; one control-plane node that runs workloads; `extraPortMappings` for 80 and 443 with `listenAddress` from variable `ingress_listen_address`, default `"127.0.0.1"`; an `extraMounts` entry mapping host path variable `lab_data_dir` to `/var/lab-data` for MinIO) and `infra/terraform/cluster/main.tf` using it with the `tehcyx/kind` provider
 - [ ] T011 Write `infra/terraform/modules/argocd-bootstrap/` (Helm release of Argo CD in namespace `argocd`, plus an `Application` pointing at `gitops/bootstrap/root-app.yaml`) and `infra/terraform/bootstrap/main.tf`
 - [ ] T012 Write `infra/terraform/modules/secrets/` creating Kubernetes Secrets in `sv-dev` and `sv-prod` from `infra/terraform/bootstrap/secrets.auto.tfvars` (git-ignored): each environment's Stripe secret key, publishable key and webhook signing secret(s) from its own sandbox; database passwords; and the mkcert `*.sortedvtg.lan` certificate and key as a `kubernetes.io/tls` Secret in `ingress-nginx`. Commit `infra/terraform/bootstrap/secrets.auto.tfvars.example` with placeholder values only
-- [ ] T013 Write `infra/Makefile` targets `up` (start the Kind node container, then wait until every Argo CD Application is `Synced` and `Healthy`, timeout 10 minutes), `down` (create a CloudNativePG `Backup` with `method: plugin` for each cluster, wait for `phase: completed`, then stop the node container), `rebuild` (`terraform apply` for `cluster` then `bootstrap`, then wait for health) and `destroy` (FR-024, FR-018)
+- [ ] T013 Write `infra/Makefile` targets `up` (start the Kind node container, then wait until every Argo CD Application is `Synced` and `Healthy`, timeout 10 minutes), `down` (read-only: wait until each CloudNativePG `Cluster` reports continuous archiving as working and its last archived WAL is no older than 120 seconds, wait 60 more seconds, then stop the node container; it creates nothing in the cluster, [research R14](./research.md#r14-backing-up-at-session-end-without-writing-to-the-cluster)), `rebuild` (`terraform apply` for `cluster` then `bootstrap`, then wait for health) and `destroy` (FR-024, FR-018)
 - [ ] T014 Write `infra/jenkins/Jenkinsfile` (fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval) and connect the mini as an agent labelled `lab`
 - [ ] T015 [P] Write `infra/docs/runbooks/lab-session.md`: open the SSH tunnel `ssh -N -L 8443:127.0.0.1:443 mac-mini`, the `/etc/hosts` entries on the Air (`dev`, `prod`, `grafana`, `argocd`, `mail` `.sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`
 
@@ -58,7 +58,7 @@
 - [ ] T018 [P] Add `gitops/platform/ingress-nginx/` using the TLS Secret from T012 as the default certificate, with Ingress hosts `dev`, `prod`, `grafana`, `argocd` and `mail` under `sortedvtg.lan`
 - [ ] T019 [P] Add `gitops/platform/kube-prometheus-stack/` with Prometheus retention sized to the memory budget and persistent volumes for Prometheus and Grafana (telemetry must survive sessions, FR-024)
 - [ ] T020 [P] Add `gitops/platform/loki/` and `gitops/platform/tempo/` (single-binary mode, persistent volumes) and `gitops/platform/otel-collector/` receiving OTLP and exporting traces to Tempo, logs to Loki and metrics to Prometheus
-- [ ] T021 [P] Add `gitops/platform/postgres/`: the CloudNativePG operator, the Barman Cloud Plugin, and per namespace (`sv-dev`, `sv-prod`) a `Cluster` with databases `listings`, `orders`, `payments`, `notifications`, an `ObjectStore` pointing at that namespace's MinIO bucket `backups`, and a daily `ScheduledBackup` with `method: plugin` (FR-023; research R10)
+- [ ] T021 [P] Add `gitops/platform/postgres/`: the CloudNativePG operator, the Barman Cloud Plugin, and per namespace (`sv-dev`, `sv-prod`) a `Cluster` with databases `listings`, `orders`, `payments`, `notifications`, an `ObjectStore` pointing at that namespace's MinIO bucket `backups`, continuous WAL archiving through the plugin with `archive_timeout: 60s` in `spec.postgresql.parameters`, and a daily `ScheduledBackup` with `method: plugin` and `immediate: true` (FR-023; research R10, R14). Record in `infra/sprints/sprint-1/spikes.md` which status field reports the last archived WAL time, for T013
 - [ ] T022 [P] Add `gitops/platform/minio/` per namespace with its volume on the Kind `extraMounts` path `/var/lab-data/minio-<env>` and buckets `photos` and `backups` created by a declarative bucket job or the chart's provisioning values
 - [ ] T023 [P] Add `gitops/platform/rabbitmq/`: the RabbitMQ Cluster Operator and Messaging Topology Operator, and a single-replica `RabbitmqCluster` per namespace with a persistent volume
 - [ ] T024 [P] Add `gitops/platform/mailpit/` per namespace (SMTP on 1025, UI behind the `mail.sortedvtg.lan` Ingress)
@@ -172,7 +172,7 @@
 
 **Independent Test**: a response-field change reaches dev with no manual step and prod only after an approved promotion PR; reverting it restores the previous version ([quickstart step 5](./quickstart.md#5-ship-a-change-through-review-user-story-4)).
 
-- [ ] T080 [US4] Add CODEOWNERS for `services/*/overlays/prod/` in `gitops/.github/CODEOWNERS` and a ruleset requiring one approval on PRs that touch it, in `infra/scripts/protect-main.sh`
+- [ ] T080 [US4] Prod approval gate per ADR-0002 (pulled into Sprint 1): create the GitHub Environment `prod` on `sorted-vintage-gitops` with the owner as required reviewer, from `infra/scripts/protect-prod.sh`; add `gitops/.github/workflows/prod-gate.yml`, which on every pull request runs a `prod-gate` job that passes at once when no file under `services/*/overlays/prod/` changed and otherwise runs in environment `prod`, so it passes only after the reviewer approves; add `prod-gate` to the required checks of the `protect-main` ruleset on the GitOps repo. PR approvals stay at zero, because GitHub does not let an author approve their own pull request
 - [ ] T081 [US4] Demonstrate a blocked release: a branch with a base image carrying a known critical CVE fails Trivy in `build.yml` and publishes nothing; record evidence in `infra/sprints/sprint-3/evidence.md`
 - [ ] T082 [US4] Demonstrate rollback by `git revert` of a promotion commit; record the time until prod runs the previous version in `infra/sprints/sprint-3/evidence.md`
 
@@ -246,7 +246,7 @@
 - **US1** (Phase 3): only Phase 2.
 - **US2** (Phase 4): needs US1, because a purchase needs a published listing and an onboarded seller (T043–T046, T049).
 - **US3** (Phase 5): needs US2 for the purchase in its test; T076 needs only T021.
-- **US4** (Phase 6): needs only Phase 2 (T029, T030); it is listed after US3 because the demonstration uses a real service.
+- **US4** (Phase 6): needs only Phase 2 (T029, T030). T080 is done in Sprint 1, as ADR-0002 requires; T081 and T082 come later because the demonstrations use a real service.
 - **US5** (Phase 7): needs US2.
 - **US6** (Phase 8): needs US2.
 - **US7** (Phase 9): needs only Phase 2 (T026, T027).
