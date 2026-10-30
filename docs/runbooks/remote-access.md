@@ -10,22 +10,21 @@ ssh mac-mini
 
 If this hangs, check that the mini is awake; away from home, check that both machines show as connected in Tailscale.
 
-## Reach web UIs on the mini
+## Reach web UIs in the lab
 
-Port-forward on the mini, tunnel from the Air, then open `http://localhost:<port>` in a browser on the Air.
+From Sprint 1, one connection carries the cluster's web UIs:
 
-| UI | On the mini | Tunnel from the Air |
-| --- | --- | --- |
-| Argo CD | `kubectl -n argocd port-forward svc/argocd-server 8080:443` | `ssh -L 8080:localhost:8080 mac-mini` |
-| Grafana | `kubectl -n monitoring port-forward svc/grafana 3000:80` | `ssh -L 3000:localhost:3000 mac-mini` |
+```bash
+ssh -N -L 8443:127.0.0.1:443 mac-mini
+```
 
-(The namespaces and service names are confirmed in Sprint 1.)
+Argo CD, Grafana, Mailpit and the marketplace are then at `https://<host>.sortedvtg.lan:8443` (see [lab-session.md](./lab-session.md)). Jenkins runs on the Air itself, at `http://localhost:8080` ([jenkins.md](./jenkins.md)).
 
 Editors: VS Code's Remote-SSH extension connects to `mac-mini` and works on the mini's files directly.
 
 ## Sessions
 
-The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. One-command start and stop (with a backup on stop) arrive in Sprint 1.
+The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. One-command start and stop arrive in Sprint 1: `make up` and `make down`, which checks that the database backups are current before stopping.
 
 ## Sharing the mini with LocalMind
 

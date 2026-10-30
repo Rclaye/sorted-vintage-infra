@@ -1,0 +1,208 @@
+openapi: 3.1.0
+info:
+  title: Listings
+  version: 1.0.0
+  description: >
+    Listings, photos, seller profiles, search and reservations (FR-004 to FR-009).
+    Field rules are in data-model.md. Health, metrics, auth and error rules are in contracts/README.md.
+servers:
+  - url: http://listings
+security:
+  - bearer: []
+paths:
+  /listings:
+    get:
+      summary: Browse and search available listings, newest first (FR-007)
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: "Full-text search over title, brand and description" }
+        - { name: brand, in: query, schema: { type: string } }
+        - { name: size, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/Category" } }
+        - { name: min_price_cents, in: query, schema: { type: integer } }
+        - { name: max_price_cents, in: query, schema: { type: integer } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 24, maximum: 60 } }
+      responses:
+        "200":
+          description: A page of listings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Listing" } }
+                  next_cursor: { type: [string, "null"] }
+    post:
+      summary: Create a draft listing for the calling seller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ListingInput" }
+      responses:
+        "201": { description: "Draft created", content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } } }
+        "422": { description: "Validation failed" }
+  /listings/{listing_id}:
+    parameters:
+      - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Get one listing
+      security: []
+      responses:
+        "200": { description: "The listing", content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } } }
+        "404": { description: "Not found or deleted" }
+    patch:
+      summary: Edit a listing (owner only)
+      parameters:
+        - { name: If-Match, in: header, required: true, schema: { type: string }, description: "The listing's version" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ListingInput" }
+      responses:
+        "200": { description: "Updated", content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } } }
+        "403": { description: "Not the owner" }
+        "409": { description: "Reserved or sold (error: listing_locked), or version mismatch (error: version_conflict)" }
+    delete:
+      summary: Delete a listing (owner only)
+      responses:
+        "204": { description: "Deleted" }
+        "409": { description: "Reserved or sold (error: listing_locked)" }
+  /listings/{listing_id}/photos:
+    parameters:
+      - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      summary: Upload one photo (owner only; at most 8 per listing)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: "JPEG, PNG or WebP, at most 10 MB (FR-005)" }
+                position: { type: integer, minimum: 0, maximum: 7 }
+      responses:
+        "201": { description: "Stored", content: { application/json: { schema: { $ref: "#/components/schemas/Photo" } } } }
+        "413": { description: "Larger than 10 MB (error: photo_too_large)" }
+        "415": { description: "Not an accepted image type (error: photo_type_rejected)" }
+        "409": { description: "Already 8 photos (error: photo_limit)" }
+  /listings/{listing_id}/photos/{photo_id}:
+    delete:
+      summary: Remove a photo (owner only; not while reserved or sold)
+      parameters:
+        - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: photo_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: "Removed" }
+  /listings/{listing_id}/publish:
+    post:
+      summary: Publish a draft (FR-014; requires payout status ready and 1 to 8 stored photos)
+      parameters:
+        - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "Now available", content: { application/json: { schema: { $ref: "#/components/schemas/Listing" } } } }
+        "409": { description: "error: payout_onboarding_required (BFF redirects to onboarding), or photos_required" }
+  /sellers/{account_sub}:
+    get:
+      summary: Public seller profile with available and sold listings (FR-008)
+      security: []
+      parameters:
+        - { name: account_sub, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_sub: { type: string, format: uuid }
+                  display_name: { type: string }
+                  sold_count: { type: integer }
+                  available: { type: array, items: { $ref: "#/components/schemas/Listing" } }
+                  sold: { type: array, items: { $ref: "#/components/schemas/Listing" } }
+  /listings/{listing_id}/reservations:
+    post:
+      summary: Reserve an available listing for 10 minutes (FR-009). Called by Orders with the buyer's token.
+      parameters:
+        - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id: { type: string, format: uuid }
+      responses:
+        "201": { description: "Reserved", content: { application/json: { schema: { $ref: "#/components/schemas/Reservation" } } } }
+        "403": { description: "Buyer is the seller (error: own_listing)" }
+        "409": { description: "Not available (error: not_available)" }
+  /reservations/{reservation_id}/consume:
+    post:
+      summary: Mark the listing sold. Idempotent; fails if the reservation was released.
+      parameters:
+        - { name: reservation_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "Listing is sold" }
+        "409": { description: "Reservation released or expired (error: reservation_released); Orders then refunds" }
+  /reservations/{reservation_id}/release:
+    post:
+      summary: Release a hold (payment failed or cancelled). Idempotent.
+      parameters:
+        - { name: reservation_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "Released; listing is available again" }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Category:
+      type: string
+      enum: [tops, bottoms, dresses, outerwear, shoes, accessories]
+    ListingInput:
+      type: object
+      required: [title, brand, category, size, condition, price_cents]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 80 }
+        brand: { type: string, minLength: 1, maxLength: 40 }
+        category: { $ref: "#/components/schemas/Category" }
+        size: { type: string, maxLength: 10 }
+        condition: { type: string, enum: [new_with_tags, like_new, good, fair] }
+        price_cents: { type: integer, minimum: 100, maximum: 1000000 }
+        description: { type: string, maxLength: 2000 }
+    Listing:
+      allOf:
+        - $ref: "#/components/schemas/ListingInput"
+        - type: object
+          required: [id, seller_sub, status, version, photos]
+          properties:
+            id: { type: string, format: uuid }
+            seller_sub: { type: string, format: uuid }
+            seller_display_name: { type: string }
+            status: { type: string, enum: [draft, available, reserved, sold] }
+            version: { type: integer }
+            photos: { type: array, items: { $ref: "#/components/schemas/Photo" } }
+            published_at: { type: [string, "null"], format: date-time }
+    Photo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, description: "Presigned or proxied MinIO URL" }
+        content_type: { type: string }
+        position: { type: integer }
+    Reservation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        listing_id: { type: string, format: uuid }
+        order_id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+        price_cents: { type: integer, description: "The asking price, which Orders records on the order" }
+        seller_sub: { type: string, format: uuid }

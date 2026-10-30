@@ -1,0 +1,91 @@
+asyncapi: 3.0.0
+info:
+  title: Orders events
+  version: 1.0.0
+  description: >
+    Events Orders publishes through its outbox (research.md R8). Delivery is at least once, so consumers
+    deduplicate on event_id. Every message carries W3C trace context in AMQP headers (research.md R9).
+defaultContentType: application/json
+servers:
+  rabbitmq:
+    host: rabbitmq:5672
+    protocol: amqp
+    description: One RabbitMQ per namespace (sv-dev, sv-prod)
+channels:
+  orders:
+    address: orders
+    description: Topic exchange; the routing key is the event type
+    messages:
+      orderPaid: { $ref: "#/components/messages/OrderPaid" }
+      orderFailed: { $ref: "#/components/messages/OrderFailed" }
+      orderRefunded: { $ref: "#/components/messages/OrderRefunded" }
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: orders, type: topic, durable: true }
+  notificationsQueue:
+    address: notifications.orders
+    description: >
+      Quorum queue bound with order.paid and order.refunded. delivery-limit 5, then dead-lettered
+      to orders.dlx and the queue notifications.orders.dead (FR-017).
+    messages:
+      orderPaid: { $ref: "#/components/messages/OrderPaid" }
+      orderRefunded: { $ref: "#/components/messages/OrderRefunded" }
+    bindings:
+      amqp:
+        is: queue
+        queue: { name: notifications.orders, durable: true, exclusive: false, autoDelete: false }
+operations:
+  publishOrderEvents:
+    action: send
+    channel: { $ref: "#/channels/orders" }
+    summary: Orders outbox relay publishes with publisher confirms
+  consumeForNotifications:
+    action: receive
+    channel: { $ref: "#/channels/notificationsQueue" }
+    summary: >
+      Notifications sends order_confirmation_buyer and item_sold_seller for order.paid (FR-015),
+      and a refund notice to the buyer for order.refunded
+components:
+  messageTraits:
+    common:
+      headers:
+        type: object
+        required: [traceparent]
+        properties:
+          traceparent: { type: string, description: "W3C trace context saved with the outbox row" }
+          tracestate: { type: string }
+  schemas:
+    Envelope:
+      type: object
+      required: [event_id, event_type, occurred_at, env, order]
+      properties:
+        event_id: { type: string, format: uuid, description: "The outbox row ID; the deduplication key" }
+        event_type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        env: { type: string, enum: [dev, prod] }
+        order:
+          type: object
+          required: [id, listing_id, buyer_sub, seller_sub, amount_cents, status]
+          properties:
+            id: { type: string, format: uuid }
+            listing_id: { type: string, format: uuid }
+            listing_title: { type: string }
+            buyer_sub: { type: string, format: uuid }
+            seller_sub: { type: string, format: uuid }
+            amount_cents: { type: integer }
+            status: { type: string, enum: [paid, failed, refunded] }
+  messages:
+    OrderPaid:
+      name: order.paid
+      traits: [{ $ref: "#/components/messageTraits/common" }]
+      payload: { $ref: "#/components/schemas/Envelope" }
+    OrderFailed:
+      name: order.failed
+      summary: Published for Project 2 correlation; no v1 consumer
+      traits: [{ $ref: "#/components/messageTraits/common" }]
+      payload: { $ref: "#/components/schemas/Envelope" }
+    OrderRefunded:
+      name: order.refunded
+      traits: [{ $ref: "#/components/messageTraits/common" }]
+      payload: { $ref: "#/components/schemas/Envelope" }

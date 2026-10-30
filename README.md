@@ -11,7 +11,8 @@ Infrastructure, pipelines and documentation for **Sorted Vintage**, a peer-to-pe
 ## Layout
 
 ```text
-.specify/            Spec Kit memory (the project constitution)
+.specify/            Spec Kit: constitution (memory/), templates, scripts and workflows
+.claude/skills/      Spec Kit commands for Claude Code (/speckit-specify, -plan, -tasks, ...)
 specs/               Spec Kit features: spec, plan and tasks per project
 sprints/sprint-N/    Sprint spec, verify script and retro
 docs/adr/            Architecture decision records
@@ -34,3 +35,9 @@ brew bundle --file scripts/Brewfile
 ```
 
 The [Brewfile](scripts/Brewfile) lists the toolchain. The remaining setup steps are in [Sprint 0](sprints/sprint-0/sprint0.md), Tickets 0.3 and 0.4.
+
+The Spec Kit workspace was created with Specify CLI 1.2.5 (Claude integration, sh scripts; options in `.specify/init-options.json`). The CLI is only needed to upgrade it; the scripts and Claude Code skills run without it. Spec Kit records the active feature in `.specify/feature.json`, which is git-ignored, so on a fresh clone set it per shell:
+
+```bash
+export SPECIFY_FEATURE_DIRECTORY=specs/001-marketplace-local-cloud
+```

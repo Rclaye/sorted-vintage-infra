@@ -1,0 +1,128 @@
+openapi: 3.1.0
+info:
+  title: Payments
+  version: 1.0.0
+  description: >
+    Stripe Connect Express onboarding, PaymentIntents, webhooks, reconciliation and the ledger (FR-010 to FR-014).
+    See research.md R3 to R7. Health, metrics, auth and error rules are in contracts/README.md.
+servers:
+  - url: http://payments
+security:
+  - bearer: []
+paths:
+  /connected-accounts/me/onboarding-link:
+    post:
+      summary: Create (if needed) the caller's Express account and return a fresh Account Link
+      responses:
+        "200":
+          description: Redirect the browser to url
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+  /connected-accounts/{account_sub}/payout-status:
+    get:
+      summary: Payout readiness. Called by Listings before publishing and by the BFF for the sell page.
+      parameters:
+        - { name: account_sub, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payout_status]
+                properties:
+                  payout_status: { type: string, enum: [none, pending, ready] }
+  /payment-intents:
+    post:
+      summary: >
+        Create a destination-charge PaymentIntent for an order. Called by Orders.
+        Idempotent on order_id (the Stripe idempotency key is the order ID).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id, amount_cents, fee_pct, seller_sub]
+              properties:
+                order_id: { type: string, format: uuid }
+                amount_cents: { type: integer }
+                fee_pct: { type: number }
+                seller_sub: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment_intent_id: { type: string }
+                  client_secret: { type: string }
+                  application_fee_cents: { type: integer }
+        "409": { description: "Seller has no ready connected account (error: seller_not_ready)" }
+        "503": { description: "Stripe unreachable (error: provider_unavailable)" }
+  /payment-intents/{payment_intent_id}/cancel:
+    post:
+      summary: Cancel an unconfirmed PaymentIntent after its reservation was released. Idempotent.
+      parameters:
+        - { name: payment_intent_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "Cancelled, or already in a final state" }
+  /webhooks/stripe:
+    post:
+      summary: Platform events from the Stripe CLI forwarder (payment_intent.*, charge.refunded)
+      security: []
+      parameters:
+        - { name: Stripe-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, description: "A Stripe Event object" }
+      responses:
+        "200": { description: "Verified and stored in the inbox (or a duplicate); applied asynchronously" }
+        "400": { description: "Signature invalid; nothing stored" }
+  /webhooks/stripe-connect:
+    post:
+      summary: Connected-account events from the forwarder (account.updated)
+      security: []
+      parameters:
+        - { name: Stripe-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, description: "A Stripe Event object with an account field" }
+      responses:
+        "200": { description: "Verified and stored" }
+        "400": { description: "Signature invalid; nothing stored" }
+  /orders/{order_id}/ledger:
+    get:
+      summary: Ledger entries for one order (buyer, seller or operator)
+      parameters:
+        - { name: order_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Entries; for a paid order they sum to the amount paid
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    party: { type: string, enum: [platform, seller] }
+                    account_sub: { type: [string, "null"], format: uuid }
+                    amount_cents: { type: integer }
+                    kind: { type: string, enum: [sale, refund] }
+                    created_at: { type: string, format: date-time }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
