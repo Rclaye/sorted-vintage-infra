@@ -86,15 +86,29 @@ gh api "repos/$SV_OWNER/sorted-vintage-gitops/environments/prod" \
 [[ -f "$G/.github/workflows/prod-gate.yml" ]] && pass "prod-gate workflow present" || fail "missing .github/workflows/prod-gate.yml in gitops"
 
 echo "Jenkins (Ticket 1.7, research R15)"
-addrs="$(lsof -nP -iTCP:8080 -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $9}' | sort -u)"
-[[ -n "$addrs" ]] || fail "Jenkins is not listening on the Air (launchctl kickstart gui/$(id -u)/com.sortedvintage.jenkins)"
-grep -qv '^127\.0\.0\.1:' <<<"$addrs" && fail "port 8080 on the Air listens beyond loopback: $(tr '\n' ' ' <<<"$addrs")"
+JUSER="${SV_JENKINS_USER:-ricomillz}"  # the Air's Jenkins account, not the mini's login of the same name
+[[ "$(id -un)" != "$JUSER" ]] || fail "run this from your everyday account, not as $JUSER"
+dsmemberutil checkmembership -U "$JUSER" -G admin | grep -q 'is not a member' \
+  && pass "the Air's $JUSER is a standard account" || fail "the Air's $JUSER is an admin or missing"
+[[ -z "$(find "$HOME" -maxdepth 0 -perm -040)" ]] && pass "your home folder is closed to other accounts" \
+  || fail "$HOME is group-readable; run chmod 700 ~ (docs/runbooks/jenkins.md, step 0)"
+# netstat, not lsof: without sudo, lsof only sees your own processes, and Jenkins runs as another account.
+listen="$(netstat -anv -p tcp 2>/dev/null | awk '$4 ~ /[.:]8080$/ && $6 == "LISTEN" {print $4, $11}' | sort -u)"
+[[ -n "$listen" ]] || fail "Jenkins is not listening on the Air (sudo launchctl kickstart system/com.sortedvintage.jenkins)"
+awk '{print $1}' <<<"$listen" | grep -qv '^127\.0\.0\.1\.' && fail "port 8080 on the Air listens beyond loopback: $(tr '\n' ' ' <<<"$listen")"
 pass "Jenkins listens on 127.0.0.1:8080 only"
+for pid in $(awk '{n=split($2, a, ":"); print a[n]}' <<<"$listen" | sort -u); do
+  [[ "$(ps -o uid= -p "$pid" | tr -d ' ')" == "$(id -u "$JUSER")" ]] || fail "port 8080 is held by PID $pid, which is not the Air's $JUSER"
+done
+pass "Jenkins runs as the Air's $JUSER"
+[[ -r "/Users/$JUSER/.ssh/sv_jenkins_agent" ]] && fail "your everyday account can read the agent key"
+pass "the agent key is not readable from your everyday account"
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/login || true)"
 [[ "$code" == 200 ]] && pass "Jenkins answers at localhost:8080" || fail "Jenkins returned '$code'"
-ssh -o BatchMode=yes -o ConnectTimeout=8 -o IdentitiesOnly=yes -i "$HOME/.ssh/sv_jenkins_agent" "$MINI" \
-  "export PATH=/opt/homebrew/bin:/opt/homebrew/opt/openjdk@21/bin:\$PATH; java -version" >/dev/null 2>&1 \
-  && pass "agent key reaches Java on the mini" || fail "agent key cannot run java on $MINI (see docs/runbooks/jenkins.md)"
+remote "grep -q '^restrict .*sv-jenkins-agent@' ~/.ssh/authorized_keys" \
+  && pass "the mini authorizes the agent key with restrict" || fail "agent key missing or unrestricted on $MINI (scripts/jenkins/authorize-agent-key.sh)"
+remote "export PATH=/opt/homebrew/opt/openjdk@21/bin:\$PATH; java -version" >/dev/null 2>&1 \
+  && pass "Java is available for the agent on the mini" || fail "Java is missing on $MINI (openjdk@21)"
 
 echo "SonarQube Cloud (T105)"
 gh api "repos/$SV_OWNER/sorted-vintage-app/commits/main/check-runs" --jq '.check_runs[].name' 2>/dev/null | grep -qi sonar \

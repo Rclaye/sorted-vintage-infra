@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Run on the Mac mini. Authorizes the Jenkins controller's agent key from the MacBook Air.
+# Run on the Mac mini, as the mini's ricomillz login. Authorizes the agent key of the Jenkins controller,
+# which runs on the MacBook Air as the Air's own ricomillz account (a different account with the same name).
 # The key may run commands (the agent needs that) but gets no port, agent or X11 forwarding and no pty.
 # Usage: authorize-agent-key.sh 'ssh-ed25519 AAAA... sv-jenkins-agent@host'
 set -euo pipefail
 
-pub="${1:?usage: $0 '<contents of ~/.ssh/sv_jenkins_agent.pub from the Air>'}"
+pub="${1:?usage: $0 '<contents of /Users/ricomillz/.ssh/sv_jenkins_agent.pub from the Air>'}"
 [[ "$pub" =~ ^ssh-ed25519\ [A-Za-z0-9+/=]+(\ .*)?$ ]] || { echo "not an ed25519 public key"; exit 1; }
 
 AK="$HOME/.ssh/authorized_keys"

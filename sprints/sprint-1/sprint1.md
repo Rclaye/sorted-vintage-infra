@@ -15,7 +15,7 @@ Decisions carried in (accepted 2026-10-29, see plan.md Complexity Tracking)
 - Single-node Kind (research R1). The T008 spike confirms it survives stop and start before any Terraform is written.
 - No Tailscale yet (research R2). Ingress binds to the mini's loopback address; the Air reaches it with `ssh -N -L 8443:127.0.0.1:443 mac-mini`.
 - Session-end backups write nothing to the cluster (research R14). WAL archiving runs continuously; `make down` only checks that it is current.
-- The lab is two machines (research R15). The Jenkins controller runs on the Air, bound to `127.0.0.1:8080`; the Intel MacBook Pro is no longer used. Code quality uses SonarQube Cloud's free plan.
+- The lab is two machines (research R15). The Jenkins controller runs on the Air as its own standard account `ricomillz` (not the Air's everyday account), bound to `127.0.0.1:8080`, and builds only `main` of `sorted-vintage-infra`; the Intel MacBook Pro is no longer used. Code quality uses SonarQube Cloud's free plan.
 
 2. Lab Topology After Sprint 1
 
@@ -23,10 +23,10 @@ Decisions carried in (accepted 2026-10-29, see plan.md Complexity Tracking)
    │  MacBook Air M4 (16 GB)           ├────────────────────────────────►│  Mac mini M4 (16 GB), Docker Desktop (12 GB)             │
    │  Browser → *.sortedvtg.lan:8443   │                                 │  Kind node "sorted-vintage" (80/443 on 127.0.0.1 only)   │
    │  /etc/hosts → 127.0.0.1           │  ssh (key sv_jenkins_agent)     │   argocd · ingress-nginx · cert-manager · kyverno        │
-   │  Jenkins controller               ├────────────────────────────────►│   prometheus · grafana · loki · tempo · otel-collector   │
+   │  Jenkins (Air account ricomillz)  ├────────────────────────────────►│   prometheus · grafana · loki · tempo · otel-collector   │
    │    127.0.0.1:8080, no executors   │  starts the agent               │   keycloak (realms sv-dev, sv-prod)                      │
    └──────┬──────────────────▲─────────┘                                 │   sv-dev / sv-prod: postgres · rabbitmq · minio ·        │
-          │ git push         │ Jenkins polls Git every 5 min             │                     mailpit · bff (stub)                 │
+          │ git push         │ Jenkins polls main every 5 min            │                     mailpit · bff (stub)                 │
           │                  │                                           │  Jenkins agent (label lab): terraform, kind, docker      │
           │                  │                                           │  ~/sv-data (extraMount): MinIO data and backups          │
           │                  │                                           └───────────────▲──────────────────────────────────────────┘
@@ -138,16 +138,19 @@ Story: As the platform owner, I want to see the infrastructure pipeline and code
 
 Implementation Requirements:
 - T104 Jenkins on the Air, following `docs/runbooks/jenkins.md`:
-    - On the Air, run `scripts/jenkins/air-setup.sh`. It installs `jenkins-lts` behind a LaunchAgent bound to `127.0.0.1:8080` that does not start at login, and creates the agent key `~/.ssh/sv_jenkins_agent`.
-    - On the mini, run `scripts/jenkins/authorize-agent-key.sh` with the printed public key. The key is `restrict`ed: it can run the agent but gets no forwarding and no pty.
+    - On the Air, from your everyday account, first close your home folder to other accounts (`chmod 700 ~`, and `chmod 600` on any credential file that is group- or world-readable).
+    - Then run `scripts/jenkins/air-setup.sh` from that same everyday account; it asks for your password for the steps that act as the Air's `ricomillz` account. It refuses to continue if `ricomillz` is an admin. It installs `jenkins-lts`, and a LaunchDaemon that runs Jenkins as the Air's `ricomillz`, bound to `127.0.0.1:8080`, not started at boot. It creates the agent key `/Users/ricomillz/.ssh/sv_jenkins_agent` (owner-only), and copies the mini's host key from your verified `known_hosts`.
+    - On the mini, as the mini's `ricomillz` login, run `scripts/jenkins/authorize-agent-key.sh` with the printed public key. The key is `restrict`ed: it can run the agent but gets no forwarding and no pty.
     - Add `openjdk@21` to `scripts/Brewfile` for the mini's agent.
-- T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mini-agent-ssh` credential (read from the key file, never committed), the `mac-mini` agent (label `lab`, launched over SSH, so no agent port is opened), zero executors on the controller, and the `infra-terraform` job polling Git every 5 minutes (GitHub cannot reach Jenkins).
+- T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mini-agent-ssh` credential (read from the key file, never committed), the `mac-mini` agent (label `lab`, launched over SSH, so no agent port is opened), zero executors on the controller, and the `infra-terraform` pipeline job polling the `main` branch of `sorted-vintage-infra` every 5 minutes (GitHub cannot reach Jenkins). It is a single-branch job: no multibranch project, and no pull request or fork discovery.
 - T014 `jenkins/Jenkinsfile` on agent `lab`: fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval.
 - T105 SonarQube Cloud free plan: organization `rclaye` bound to GitHub, the SonarQube Cloud GitHub App on `sorted-vintage-app`, automatic analysis off, project `rclaye_sv-bff`, `sonar-project.properties` in the BFF and the template, and a `sonar` step in `build.yml` after tests. You create `SONAR_TOKEN` in SonarQube Cloud and add it as a repository secret yourself. If the scan action does not run on `ubuntu-24.04-arm`, run only the scan job on `ubuntu-24.04`.
 - T106 ADR-0008 (Jenkins on the Air; SonarQube Cloud instead of self-hosted; the lab drops to two machines) and a PATCH amendment to the constitution's hardware lines (1.1.0 → 1.1.1).
 
 Acceptance Criteria Verification:
-- On the Air, `lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, and `http://localhost:8080` shows Jenkins.
+- On the Air, `lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, owned by the Air's `ricomillz`, and `http://localhost:8080` shows Jenkins.
+- The Air's everyday account cannot read `/Users/ricomillz/.ssh/sv_jenkins_agent`, and the Air's `ricomillz` is not in the `admin` group.
+- Jenkins has exactly one job, `infra-terraform`, and it builds `main` only.
 - The `mac-mini` agent is online in Jenkins, and an `infra-terraform` run shows plan, a paused approval, and apply on it.
 - A pull request to `sorted-vintage-app` shows the SonarQube Cloud quality gate.
 
