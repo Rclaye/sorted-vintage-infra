@@ -145,7 +145,7 @@ Implementation Requirements:
 - T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mini-agent-ssh` credential (read from the key file, never committed), the `mac-mini` agent (label `lab`, launched over SSH, so no agent port is opened), zero executors on the controller, and the `infra-terraform` pipeline job polling the `main` branch of `sorted-vintage-infra` every 5 minutes (GitHub cannot reach Jenkins). It is a single-branch job: no multibranch project, and no pull request or fork discovery.
 - T014 `jenkins/Jenkinsfile` on agent `lab`: fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval.
 - T105 SonarQube Cloud free plan: organization `rclaye` bound to GitHub, the SonarQube Cloud GitHub App on `sorted-vintage-app`, automatic analysis off, project `rclaye_sv-bff`, `sonar-project.properties` in the BFF and the template, and a `sonar` step in `build.yml` after tests. You create `SONAR_TOKEN` in SonarQube Cloud and add it as a repository secret yourself. If the scan action does not run on `ubuntu-24.04-arm`, run only the scan job on `ubuntu-24.04`.
-- T106 ADR-0008 (Jenkins on the Air; SonarQube Cloud instead of self-hosted; the lab drops to two machines) and a PATCH amendment to the constitution's hardware lines (1.1.0 → 1.1.1).
+- T106 ADR-0008 (Jenkins on the Air; SonarQube Cloud instead of self-hosted; the lab drops to two machines; Principle II reads "one command, `make rebuild`") and a MINOR amendment to the constitution (1.1.0 → 1.2.0). Done before T104 and T103.
 
 Acceptance Criteria Verification:
 - On the Air, `sudo lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, owned by the Air's `ricomillz`, and `http://localhost:8080` shows Jenkins.

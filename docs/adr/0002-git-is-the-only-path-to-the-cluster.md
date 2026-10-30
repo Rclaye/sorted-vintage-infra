@@ -11,7 +11,7 @@ A common pipeline pattern gives CI credentials to the cluster and lets it run `k
 
 - Argo CD is the only component that writes workloads to the cluster. It syncs from `sorted-vintage-gitops`.
 - GitHub Actions builds, scans and publishes images, then commits the new image tag to the GitOps repo. It holds no cluster credentials.
-- Jenkins runs infrastructure pipelines (plan, approval, apply). Its one cluster-level write is creating the cluster and installing Argo CD, recorded in the plan's Complexity Tracking.
+- Jenkins runs infrastructure pipelines (plan, approval, apply). Its agent on the mini holds the kubeconfig to create, destroy and rebuild the cluster, install Argo CD and the bootstrap Secrets, and run read-only checks. It never writes a workload Argo CD manages. The exception is recorded in the plan's Complexity Tracking.
 - Dev syncs automatically. Prod changes arrive as pull requests to `services/*/overlays/prod`.
 - Rollback is `git revert`.
 

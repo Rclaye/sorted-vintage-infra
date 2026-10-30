@@ -7,7 +7,7 @@
 
 Earlier Clixx projects ran on AWS (EC2, ECS, kubeadm on EC2). Sorted Vintage needs a cluster that can run long working sessions over several months, keep its telemetry between sessions for the detection work, and be rebuilt cheaply. The program has a $0 recurring budget (constitution, Additional Constraints).
 
-Available hardware: a Mac mini M4 with 16 GB, a MacBook Air M4 with 16 GB, and an Intel MacBook Pro with 8 GB.
+Available hardware at the time: a Mac mini M4 with 16 GB, a MacBook Air M4 with 16 GB, and an Intel MacBook Pro with 8 GB. Since 2026-10-30 the lab is two machines, the mini and the Air; the Intel MacBook Pro left the lab (ADR-0008).
 
 ## Decision
 
@@ -18,7 +18,7 @@ Run a multi-node Kind cluster (one control plane, two workers) on the Mac mini u
 - No cloud cost, and no meter running between sessions. The lab runs while I work and is stopped otherwise.
 - Everything above the cluster (Argo CD, GitOps layout, observability, policy) carries over to EKS unchanged. Only the `terraform/cluster` root is Kind-specific.
 - AWS-specific skills (IAM roles for service accounts, load balancer controller, managed node groups) are not exercised here; the existing AWS projects already show them.
-- One host is a single point of failure. Node failure can be simulated by stopping a Kind node container; a real multi-host cluster is a later option (k3s across the three Macs).
+- One host is a single point of failure. Node failure can be simulated by stopping a Kind node container; a real multi-host cluster is a later option (k3s across the Macs).
 - Total memory for containers is capped at 12 GB, which shapes component choices (see the plan's memory budget).
 
 ## Alternatives considered
@@ -27,4 +27,4 @@ Run a multi-node Kind cluster (one control plane, two workers) on the Mac mini u
 | --- | --- |
 | Amazon EKS | About $73 a month for the control plane alone, plus nodes, NAT and load balancers, with the added risk of forgetting to tear it down between sessions |
 | Minikube | Single-node by default; Kind's multi-node clusters make node failure scenarios possible |
-| k3s across the three Macs | Needs Linux VMs with bridged networking on each Mac; worth doing later, too fiddly for the foundation |
+| k3s across the Macs | Needs Linux VMs with bridged networking on each Mac; worth doing later, too fiddly for the foundation |
