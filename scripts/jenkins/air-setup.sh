@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run on the MacBook Air from your everyday (admin) account. Idempotent; asks for your password.
 # Installs the Jenkins controller bound to 127.0.0.1:8080 (nothing listens on the home network),
-# running as the Air's dedicated standard account (default ricomillz, not the mini's login of the same name),
-# and creates the key that account uses to start the build agent on the Mac mini over SSH.
+# running as the Air's dedicated standard account (default ricomillz, not the mini's admin of the same name),
+# and creates the key that account uses to start the build agent on the Mac mini over SSH, as the mini's bot.
 # See docs/runbooks/jenkins.md and research R15.
 #   SV_JENKINS_USER  the Air's Jenkins account (default: ricomillz)
 #   SV_MINI_HOST     the mini's hostname as written in your known_hosts (default: ricomillzs-Mac-mini.local)
@@ -91,7 +91,7 @@ if entry="$(ssh-keygen -F "$MINI_HOST" -f "$HOME/.ssh/known_hosts" | grep -v '^#
   fi
   echo "  $JUSER trusts the mini's host key from your known_hosts"
 else
-  echo "  WARNING: $MINI_HOST is not in your known_hosts; run 'ssh mac-mini true' once, then rerun this script."
+  echo "  WARNING: $MINI_HOST is not in your known_hosts; run 'ssh mac-mini-lab true' once, then rerun this script."
 fi
 
 echo
@@ -99,5 +99,5 @@ echo "Done. Jenkins does not start at boot; start it at the beginning of a lab s
 echo "  sudo launchctl kickstart system/$LABEL"
 echo "and open http://localhost:8080."
 echo
-echo "Next, on the Mac mini, as its own ricomillz login, authorize the agent key (prints nothing secret):"
-echo "  scripts/jenkins/authorize-agent-key.sh '$(sudo cat "$KEY.pub")'"
+echo "Next, from this account, authorize the agent key on the mini as bot (prints nothing secret):"
+echo "  ssh mac-mini-lab \"~/Sorted-Vintage/src/sorted-vintage-infra/scripts/jenkins/authorize-agent-key.sh '$(sudo cat "$KEY.pub")'\""

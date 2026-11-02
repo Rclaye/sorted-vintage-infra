@@ -1,13 +1,13 @@
 # Runbook: Jenkins
 
-The Jenkins controller runs on the MacBook Air, bound to `127.0.0.1:8080`, so nothing listens on the home network. It runs as the Air's dedicated standard account `ricomillz`, not as your everyday account, so a server full of plugins never runs with access to your own files, SSH keys or GitHub login. It runs no builds itself. It starts a build agent on the Mac mini over SSH, which is where Terraform runs, next to Docker and `secrets.auto.tfvars`. GitHub cannot reach Jenkins, so its one job polls the `main` branch every 5 minutes. Decision: [research R15](../../specs/001-marketplace-local-cloud/research.md#r15-ci-hosts-and-how-they-are-reached).
+The Jenkins controller runs on the MacBook Air, bound to `127.0.0.1:8080`, so nothing listens on the home network. It runs as the Air's dedicated standard account `ricomillz`, not as your everyday account, so a server full of plugins never runs with access to your own files, SSH keys or GitHub login. It runs no builds itself. It starts a build agent on the Mac mini over SSH, as the mini's standard account `bot`, which owns the lab: Terraform runs there, next to Docker and `secrets.auto.tfvars`. GitHub cannot reach Jenkins, so its one job polls the `main` branch every 5 minutes. Decision: [research R15](../../specs/001-marketplace-local-cloud/research.md#r15-ci-hosts-and-how-they-are-reached).
 
-> **Two accounts named `ricomillz`.** The Air has a standard account `ricomillz` that exists only to run Jenkins. The mini has its own login `ricomillz`, which the agent logs in as. They are different accounts on different machines. This runbook always says which one it means.
+> **Which account is which.** On the Air, `ricomillz` is a standard account that exists only to run Jenkins. On the mini, `bot` is the standard account that owns the lab, and the agent logs in as it. The mini also has an admin account called `ricomillz`; Jenkins never uses it. This runbook always says which machine it means.
 
 ```text
 MacBook Air                                          Mac mini
   everyday account: browser → http://localhost:8080
-  Air's ricomillz:  Jenkins 127.0.0.1:8080 ──ssh──▶  mini's ricomillz: agent (label lab)
+  Air's ricomillz:  Jenkins 127.0.0.1:8080 ──ssh──▶  mini's bot: agent (label lab)
                     key sv_jenkins_agent              terraform, kind, docker
                                                       (key restricted: no forwarding, no pty)
 ```
@@ -38,13 +38,13 @@ scripts/jenkins/air-setup.sh
 
 It asks for your password. It installs `jenkins-lts` with Homebrew and stops the Homebrew service. It writes the LaunchDaemon `/Library/LaunchDaemons/com.sortedvintage.jenkins.plist`, which runs Jenkins as the Air's `ricomillz`, bound to loopback, and does not start at boot. It copies `jenkins/casc.yaml` to `/Users/ricomillz/.jenkins/`, and creates the agent key `/Users/ricomillz/.ssh/sv_jenkins_agent`, readable only by that account. It gives that account the mini's host key from your own verified `known_hosts`, and prints the command for step 2.
 
-**2. On the Mac mini**, logged in as the mini's `ricomillz`, paste the command step 1 printed:
+**2. Authorize the key on the mini.** Still on the Air, paste the command step 1 printed. It logs in to the mini as `bot` (`ssh mac-mini-lab`) and runs `scripts/jenkins/authorize-agent-key.sh` from `bot`'s clone of this repository:
 
 ```bash
-scripts/jenkins/authorize-agent-key.sh '<the public key step 1 printed>'
+ssh mac-mini-lab "~/Sorted-Vintage/src/sorted-vintage-infra/scripts/jenkins/authorize-agent-key.sh '<the public key step 1 printed>'"
 ```
 
-The mini needs Java for the agent: `openjdk@21` is added to the [Brewfile](../../scripts/Brewfile) in Sprint 1, Ticket 1.1.
+The mini needs Java for the agent: `openjdk@21` is in the [Brewfile](../../scripts/Brewfile), installed by the mini's admin account. `/usr/bin/java` on a Mac is only a stub, so the agent uses `/opt/homebrew/opt/openjdk@21/bin/java`.
 
 **3. Start Jenkins and finish the first-run wizard** at `http://localhost:8080`. The unlock password is in a file only the Air's `ricomillz` can read. This copies it to your clipboard without printing it:
 
@@ -85,6 +85,7 @@ This must show `127.0.0.1:8080` only, with `ricomillz` in the USER column. It ne
 | Symptom | Check |
 | --- | --- |
 | `localhost:8080` refuses | `sudo tail -50 /Users/ricomillz/Library/Logs/sorted-vintage/jenkins.log`; was Jenkins started? `sudo launchctl print system/com.sortedvintage.jenkins` shows its state. |
-| The `mac-mini` agent is offline | `sudo -u ricomillz -H ssh -i /Users/ricomillz/.ssh/sv_jenkins_agent ricomillz@ricomillzs-Mac-mini.local java -version` on the Air. `Permission denied` means step 2 was not run; `Host key verification failed` means rerun step 1 after `ssh mac-mini true`; a Java error means Java is missing on the mini. |
+| The `mac-mini` agent is offline | `sudo -u ricomillz -H ssh -i /Users/ricomillz/.ssh/sv_jenkins_agent bot@ricomillzs-Mac-mini.local /opt/homebrew/opt/openjdk@21/bin/java -version` on the Air. `Permission denied` means step 2 was not run; `Host key verification failed` means rerun step 1 after `ssh mac-mini-lab true`; a Java error means Java is missing on the mini. |
 | A job never starts | The mini is off, or its agent is offline; jobs wait for label `lab`. |
+| A job fails to reach Docker | `bot` is not logged in at the mini's screen, so Docker Desktop is not running. Log in as `bot` (use fast user switching, not Log Out, to reach other accounts). |
 | `air-setup.sh` stops at "is an admin" | Make the Air's `ricomillz` a standard account in System Settings → Users & Groups. |
