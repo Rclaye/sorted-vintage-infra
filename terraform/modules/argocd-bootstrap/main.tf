@@ -25,6 +25,9 @@ resource "helm_release" "argocd" {
       params = {
         # TLS terminates at Traefik with the mkcert certificate (research R18).
         "server.insecure" = true
+        # A sync that waits on a wave that never turns Healthy fails after 10 minutes instead of
+        # running forever and blocking every later commit (seen on 2026-11-01 with Traefik).
+        "controller.sync.timeout.seconds" = 600
       }
       cm = {
         # Report a child Application's own health, so sync waves in the root app-of-apps wait for it.
