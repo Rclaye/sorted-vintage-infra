@@ -11,6 +11,8 @@ secrets.auto.tfvars
 *.tfvars.json
 !*.tfvars.example
 kubeconfig*
+# The Kind provider writes the cluster kubeconfig, with its admin client key, next to the root it runs in.
+terraform/**/*-config
 *.sql
 *.dump
 
