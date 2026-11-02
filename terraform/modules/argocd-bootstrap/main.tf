@@ -23,8 +23,23 @@ resource "helm_release" "argocd" {
   values = [yamlencode({
     configs = {
       params = {
-        # TLS terminates at ingress-nginx with the mkcert certificate (Ticket 1.3).
+        # TLS terminates at Traefik with the mkcert certificate (research R18).
         "server.insecure" = true
+      }
+      cm = {
+        # Report a child Application's own health, so sync waves in the root app-of-apps wait for it.
+        "resource.customizations.health.argoproj.io_Application" = <<-EOT
+          hs = {}
+          hs.status = "Progressing"
+          hs.message = ""
+          if obj.status ~= nil and obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+          return hs
+        EOT
       }
     }
     dex           = { enabled = false }

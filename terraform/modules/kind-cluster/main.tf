@@ -35,7 +35,7 @@ resource "kind_cluster" "this" {
     node {
       role = "control-plane"
 
-      # ingress-nginx's Kind deployment schedules onto nodes with this label.
+      # Traefik is pinned to the node with this label, so its hostPorts meet the port mappings below.
       kubeadm_config_patches = [
         <<-EOT
         kind: InitConfiguration
@@ -59,7 +59,7 @@ resource "kind_cluster" "this" {
         protocol       = "TCP"
       }
 
-      # MinIO data and backups live outside the cluster lifecycle (plan: Backup durability).
+      # Garage's photos and backups live outside the cluster lifecycle (research R19).
       extra_mounts {
         host_path      = terraform_data.lab_data_dir.output
         container_path = "/var/lab-data"

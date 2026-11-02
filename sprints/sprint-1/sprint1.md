@@ -6,7 +6,7 @@ Source: specs/001-marketplace-local-cloud/tasks.md, Phases 1–2, T080 and T103�
 
 1. Executive Summary & Sprint 1 Objective
 
-Sprint 1 builds the platform every user story runs on. Terraform creates a single-node Kind cluster on the Mac mini and installs Argo CD. From then on, Argo CD installs everything else from `sorted-vintage-gitops`: ingress, observability, Postgres with continuous backups, RabbitMQ, MinIO, Mailpit, Keycloak and Kyverno. A Copier template produces services that meet the constitution from their first commit, and a stub BFF generated from it travels the full delivery path: GitHub Actions build, a tag commit to Git, Argo CD sync in dev, and a gated promotion to prod. Jenkins runs on the MacBook Air, bound to loopback, with its build agent on the mini, and SonarQube Cloud checks code quality on every pull request. The sprint ends with `make up` and `make down` for working sessions, and a measured memory budget.
+Sprint 1 builds the platform every user story runs on. Terraform creates a single-node Kind cluster on the Mac mini and installs Argo CD. From then on, Argo CD installs everything else from `sorted-vintage-gitops`: ingress (Traefik), observability, Postgres with continuous backups, RabbitMQ, Garage, Mailpit, Keycloak and Kyverno. A Copier template produces services that meet the constitution from their first commit, and a stub BFF generated from it travels the full delivery path: GitHub Actions build, a tag commit to Git, Argo CD sync in dev, and a gated promotion to prod. Jenkins runs on the MacBook Air, bound to loopback, with its build agent on the mini, and SonarQube Cloud checks code quality on every pull request. The sprint ends with `make up` and `make down` for working sessions, and a measured memory budget.
 
 Sprint Objective
 One `make rebuild` on the mini ends with every Argo CD Application `Synced` and `Healthy`, Kyverno rejecting non-compliant workloads, and the stub BFF answering `https://dev.sortedvtg.lan:8443/healthz` from the MacBook Air through the SSH tunnel.
@@ -23,13 +23,13 @@ Decisions carried in (accepted 2026-10-29, see plan.md Complexity Tracking)
    ┌───────────────────────────────────┐  ssh -N -L 8443:127.0.0.1:443   ┌──────────────────────────────────────────────────────────┐
    │  MacBook Air M4 (16 GB)           ├────────────────────────────────►│  Mac mini M4 (16 GB), account bot, Docker Desktop (12 GB)│
    │  Browser → *.sortedvtg.lan:8443   │                                 │  Kind node "sorted-vintage" (80/443 on 127.0.0.1 only)   │
-   │  /etc/hosts → 127.0.0.1           │  ssh (key sv_jenkins_agent)     │   argocd · ingress-nginx · cert-manager · kyverno        │
+   │  /etc/hosts → 127.0.0.1           │  ssh (key sv_jenkins_agent)     │   argocd · traefik · cert-manager · kyverno              │
    │  Jenkins (Air account ricomillz)  ├────────────────────────────────►│   prometheus · grafana · loki · tempo · otel-collector   │
    │    127.0.0.1:8080, no executors   │  starts the agent               │   keycloak (realms sv-dev, sv-prod)                      │
-   └──────┬──────────────────▲─────────┘                                 │   sv-dev / sv-prod: postgres · rabbitmq · minio ·        │
+   └──────┬──────────────────▲─────────┘                                 │   sv-dev / sv-prod: postgres · rabbitmq · garage ·        │
           │ git push         │ Jenkins polls main every 5 min            │                     mailpit · bff (stub)                 │
           │                  │                                           │  Jenkins agent (label lab): terraform, kind, docker      │
-          │                  │                                           │  ~/sv-data (extraMount): MinIO data and backups          │
+          │                  │                                           │  ~/sv-data (extraMount): Garage photos and backups      │
           │                  │                                           └───────────────▲──────────────────────────────────────────┘
           │                  │                                                           │ Argo CD pulls
    ┌──────▼──────────────────┴───────────────────────────────────────────────────────────┴──────┐
@@ -61,7 +61,7 @@ Story: As the platform owner, I want Terraform to create exactly what must exist
 Implementation Requirements:
 - T010 `terraform/modules/kind-cluster/` and `terraform/cluster/main.tf` (provider `tehcyx/kind`): cluster `sorted-vintage`, one control-plane node that runs workloads, `extraPortMappings` for 80 and 443 with `listenAddress` from variable `ingress_listen_address` (default `"127.0.0.1"`; set to the Tailscale IP once it exists), and an `extraMounts` entry from variable `lab_data_dir` (default `~/sv-data`) to `/var/lab-data`.
 - T011 `terraform/modules/argocd-bootstrap/` and `terraform/bootstrap/main.tf`: Argo CD by Helm in `argocd`, plus one `Application` for `gitops/bootstrap/root-app.yaml`.
-- T012 `terraform/modules/secrets/`: Kubernetes Secrets in `sv-dev` and `sv-prod` from the git-ignored `terraform/bootstrap/secrets.auto.tfvars`, holding each environment's Stripe keys and signing secret (from its own sandbox), database passwords, and the mkcert `*.sortedvtg.lan` certificate as a TLS Secret in `ingress-nginx`. Commit only `secrets.auto.tfvars.example`, with placeholders.
+- T012 `terraform/modules/secrets/`: Kubernetes Secrets in `sv-dev` and `sv-prod` from the git-ignored `terraform/bootstrap/secrets.auto.tfvars`, holding each environment's Stripe keys and signing secret (from its own sandbox), database passwords, and the mkcert `*.sortedvtg.lan` certificate as a TLS Secret in `traefik`. Commit only `secrets.auto.tfvars.example`, with placeholders.
 
 Acceptance Criteria Verification:
 - `terraform apply` for `cluster` then `bootstrap` succeeds on the mini, and a second `terraform plan` for each shows no changes.
@@ -75,17 +75,17 @@ Story: As the platform owner, I want every shared component installed from the G
 Implementation Requirements:
 - T016 `bootstrap/root-app.yaml` (app-of-apps over `platform/`) and `bootstrap/services-appset.yaml`: a Git directory generator over `services/*/overlays/*`, app name `<service>-<overlay>`, namespace `sv-<overlay>` (FR-025).
 - T017 cert-manager, required by the Barman Cloud Plugin.
-- T018 ingress-nginx with the T012 certificate as default, hosts `dev`, `prod`, `grafana`, `argocd` and `mail` under `sortedvtg.lan`.
+- T018 Traefik (research R18; ingress-nginx is retired) with the T012 certificate as default, hosts `dev`, `prod`, `grafana`, `argocd` and `mail` under `sortedvtg.lan`.
 - T019 kube-prometheus-stack and T020 Loki, Tempo and the OpenTelemetry Collector, all with persistent volumes so telemetry survives sessions (FR-024).
 - T021 CloudNativePG operator and Barman Cloud Plugin; per namespace a `Cluster` with databases `listings`, `orders`, `payments`, `notifications`; an `ObjectStore` on that namespace's MinIO bucket `backups`; continuous WAL archiving with `archive_timeout: 60s`; a daily `ScheduledBackup` with `immediate: true`. Record in `spikes.md` which status field reports the last archived WAL time (needed by Ticket 1.6).
-- T022 MinIO per namespace on `/var/lab-data/minio-<env>`, with buckets `photos` and `backups`.
+- T022 Garage per namespace on `/var/lab-data/garage-<env>` (research R19; MinIO's community edition is archived), with buckets `photos` and `backups` and S3 keys imported from Terraform-created Secrets; spike that CloudNativePG backup and restore work against it.
 - T023 RabbitMQ Cluster Operator and Messaging Topology Operator, one `RabbitmqCluster` per namespace.
 - T024 Mailpit per namespace.
 - T025 Keycloak with realms `sv-dev` and `sv-prod` from realm JSON: registration with email verification over Mailpit, a `display_name` attribute issued as a token claim, the confidential `bff` client (code flow with PKCE), and client-credentials clients `orders`, `payments`, `listings`, each with an audience mapper.
 
 Acceptance Criteria Verification:
 - Every Argo CD Application is `Synced` and `Healthy`.
-- Each CloudNativePG `Cluster` reports continuous archiving as working, and the first base backup exists in MinIO.
+- Each CloudNativePG `Cluster` reports continuous archiving as working, and the first base backup exists in Garage.
 - Deleting a platform Deployment by hand is reverted by Argo CD (drift check; do this once and record it).
 
 Ticket 1.4 — Policy at Admission and in CI (T026)
@@ -127,7 +127,7 @@ Implementation Requirements:
     - `up`: refuse to start unless it runs as `bot`, Docker answers and Ollama is not running; then start the Kind node container, then wait (up to 10 minutes) until every Argo CD Application is `Synced` and `Healthy`.
     - `down`: read-only. Wait until each CloudNativePG `Cluster` reports continuous archiving as working and its last archived WAL is no older than 120 seconds, wait 60 more seconds, then stop the node container. It creates nothing in the cluster (research R14).
     - `rebuild`: `terraform apply` for `cluster` then `bootstrap`, then wait for health.
-    - `destroy`: `terraform destroy` for `bootstrap` then `cluster`. The MinIO data on `~/sv-data` is kept.
+    - `destroy`: `terraform destroy` for `bootstrap` then `cluster`. The Garage data on `~/sv-data` is kept.
 - T015 `docs/runbooks/lab-session.md`: logging in as `bot` at the mini's screen, the SSH tunnel, the `/etc/hosts` entries on the Air (`dev`, `prod`, `grafana`, `argocd`, `mail` under `sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`. Link it from `docs/runbooks/remote-access.md`.
 
 Acceptance Criteria Verification:

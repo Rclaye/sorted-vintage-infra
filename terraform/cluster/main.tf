@@ -29,7 +29,7 @@ variable "ingress_listen_address" {
 }
 
 variable "lab_data_dir" {
-  description = "Host directory for MinIO data and backups."
+  description = "Host directory for Garage data (photos and backups)."
   type        = string
   default     = "~/sv-data"
 }
