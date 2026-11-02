@@ -3,12 +3,12 @@
 # Read-only: it changes nothing in the cluster (server-side dry runs only).
 #   SV_ROOT     folder holding the three clones on the Air (default: ~/Sorted-Vintage/src)
 #   SV_OWNER    GitHub owner (default: the logged-in gh user)
-#   MINI        ssh host for the Mac mini (default: mac-mini)
+#   MINI        ssh host for the Mac mini's lab account bot (default: mac-mini-lab)
 #   MINI_INFRA  sorted-vintage-infra clone on the mini (default: $HOME/Sorted-Vintage/src/sorted-vintage-infra on the mini)
 set -euo pipefail
 
 SV_ROOT="${SV_ROOT:-$HOME/Sorted-Vintage/src}"
-MINI="${MINI:-mac-mini}"
+MINI="${MINI:-mac-mini-lab}"
 MINI_INFRA="${MINI_INFRA:-\$HOME/Sorted-Vintage/src/sorted-vintage-infra}"  # expanded on the mini
 CLUSTER=sorted-vintage
 NODE="$CLUSTER-control-plane"
@@ -27,6 +27,10 @@ SV_OWNER="${SV_OWNER:-$(gh api user --jq .login)}"
 
 echo "Mac mini toolchain (Ticket 1.1)"
 ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" true 2>/dev/null && pass "ssh $MINI" || fail "cannot ssh to $MINI"
+remote "id -un" | grep -qx bot && pass "the lab runs as bot" || fail "$MINI does not log in as bot (ADR-0008)"
+remote "dsmemberutil checkmembership -U bot -G admin" | grep -q "is not a member" && pass "bot is a standard account" || fail "bot is an admin on the mini"
+remote "docker info >/dev/null 2>&1" && pass "Docker answers for bot" || fail "Docker is not running for bot; log in as bot at the mini's screen"
+remote "pgrep -qi ollama" && fail "Ollama is running on the mini; quit it before a session" || pass "Ollama is not running"
 for t in kind terraform kubectl helm mkcert stripe kyverno tfsec; do
   remote "command -v $t >/dev/null" && pass "mini has $t" || fail "mini is missing $t (brew bundle --file scripts/Brewfile)"
 done
