@@ -147,8 +147,8 @@ Written in the same transaction as the Order change it describes.
 | --- | --- | --- |
 | account_sub | UUID | Primary key |
 | stripe_account_id | string | Unique; `acct_…` in this environment's Stripe sandbox |
-| details_submitted, charges_enabled, payouts_enabled | boolean | Updated from `account.updated` and the reconciliation loop |
-| payout_status | derived | `ready` when `charges_enabled` and `payouts_enabled`; `pending` when the account exists; `none` when there is no row |
+| card_payments_status, stripe_transfers_status | string | Accounts v2 capability statuses (`active`, `pending`, `restricted`, `unsupported`); updated from the thin events `v1.account.updated` and `v1.capability.updated` and from the reconciliation loop (research R17) |
+| payout_status | derived | `ready` when both statuses are `active`; `pending` when the account exists; `none` when there is no row |
 | updated_at | timestamp | |
 
 ## Payment event (Payments)

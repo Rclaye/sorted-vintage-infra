@@ -3,7 +3,7 @@ info:
   title: Payments
   version: 1.0.0
   description: >
-    Stripe Connect Express onboarding, PaymentIntents, webhooks, reconciliation and the ledger (FR-010 to FR-014).
+    Stripe Connect onboarding (Accounts v2, research R17), PaymentIntents, webhooks, reconciliation and the ledger (FR-010 to FR-014).
     See research.md R3 to R7. Health, metrics, auth and error rules are in contracts/README.md.
 servers:
   - url: http://payments
@@ -12,7 +12,7 @@ security:
 paths:
   /connected-accounts/me/onboarding-link:
     post:
-      summary: Create (if needed) the caller's Express account and return a fresh Account Link
+      summary: Create (if needed) the caller's Accounts v2 connected account and return a fresh Stripe-hosted Account Link
       responses:
         "200":
           description: Redirect the browser to url
@@ -91,7 +91,7 @@ paths:
         "400": { description: "Signature invalid; nothing stored" }
   /webhooks/stripe-connect:
     post:
-      summary: Connected-account events from the forwarder (account.updated)
+      summary: Connected-account thin events from the forwarder (v1.account.updated, v1.capability.updated)
       security: []
       parameters:
         - { name: Stripe-Signature, in: header, required: true, schema: { type: string } }
