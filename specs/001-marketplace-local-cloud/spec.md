@@ -60,7 +60,7 @@ The platform engineer destroys the lab environment and rebuilds it, with the mar
 
 **Why this priority**: Principle II; it is also the first case-study metric.
 
-**Independent Test**: on the Mac mini, destroy everything, run one `terraform apply`, and time how long it takes until every application reports healthy and a purchase succeeds.
+**Independent Test**: on the Mac mini, destroy everything, run the one documented command (`make rebuild`), and time how long it takes until every application reports healthy and a purchase succeeds.
 
 **Acceptance Scenarios**:
 
@@ -183,7 +183,7 @@ The platform engineer creates a new service from the service template, opens one
 - **FR-023**: Data stores MUST be backed up when a session ends, and a restore MUST be demonstrated during the rebuild drill.
 - **FR-025**: Environments for a service MUST be generated from the GitOps repo's folder layout; adding a service MUST need no change to platform configuration.
 - **FR-026**: A service template MUST produce a service that meets FR-020 and FR-027 from its first commit.
-- **FR-027**: The cluster MUST reject workloads that run as root, lack resource requests and limits, or use images from outside the project's registry, however they arrive; the same rules MUST run in CI on every pull request.
+- **FR-027**: The cluster MUST reject workloads that run as root, lack resource requests and limits, or, for application workloads in dev and prod, use images from outside the project's registry (`ghcr.io/rclaye/`), however they arrive; third-party platform components are exempt from the registry rule; the same rules MUST run in CI on every pull request.
 - **FR-024**: Starting and stopping the lab MUST each be one command. After a stop and start, the platform MUST return to healthy with its data and telemetry history intact.
 
 ### Key Entities

@@ -28,6 +28,8 @@ The identity record. Services know an account only by its Keycloak subject (`sub
 
 There is one account type: any account can buy and sell (FR-002).
 
+**Storage**: Keycloak's own CloudNativePG `Cluster`, `keycloak-db`, archived and restored with the service databases, so accounts survive stop and start (FR-024) and the rebuild drill (FR-023; [research R16](./research.md#r16-keycloaks-database)).
+
 ## Seller profile (Listings)
 
 Created the first time an account starts a listing.

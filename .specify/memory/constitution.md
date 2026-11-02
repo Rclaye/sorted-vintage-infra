@@ -2,12 +2,12 @@
 
 <!--
 Sync Impact Report
-- Version: 1.0.0 → 1.1.0 (MINOR: Principle III expanded, Principle VIII added)
-- Modified: III. Gate Before Change (policy enforced in CI and at cluster admission)
-- Added: VIII. Declarative, Reconciled Infrastructure
-- Added constraint: no imperative webhooks that change cluster state
-- Previous: 0.0.0 → 1.0.0 initial ratification (Principles I–VII)
+- Version: 1.1.0 → 1.2.0 (MINOR: a constraint changed and Principle II's mechanism restated; no principle removed or redefined; ADR-0008)
+- Modified: II. Rebuildable From Code (one command, `make rebuild`, instead of one `terraform apply`; the two Terraform roots stay)
+- Modified constraints: Hardware budget (two machines; the Intel MacBook Pro leaves the lab; the Air hosts the Jenkins controller and the mini its build agent); CI split (SonarQube Cloud replaces self-hosted SonarQube)
+- Previous: 1.0.0 → 1.1.0 (MINOR: Principle III expanded, Principle VIII added, no imperative webhooks that change cluster state); 0.0.0 → 1.0.0 initial ratification (Principles I–VII)
 - Templates requiring updates: plan-template.md (Constitution Check gates) ✅ aligned, tasks-template.md ✅ aligned
+- Dependent documents updated: specs/001-marketplace-local-cloud/spec.md (User Story 3), plan.md (Constitution Check), tasks.md (T106), research.md (R15), docs/adr/0001
 - Deferred items: none
 -->
 
@@ -19,7 +19,7 @@ Every change to a running environment MUST arrive as a commit to the GitOps repo
 **Rationale:** one audit trail, one rollback mechanism, and drift that Argo CD can detect.
 
 ### II. Rebuildable From Code
-The entire platform MUST be reproducible from an empty machine with one `terraform apply` followed by Argo CD sync. Manual setup steps are defects. A timed teardown and rebuild drill MUST be run and recorded at every project gate.
+The entire platform MUST be reproducible from an empty machine with one command, `make rebuild`, which applies the Terraform roots in order and waits for Argo CD to sync. Manual setup steps are defects. A timed teardown and rebuild drill MUST be run and recorded at every project gate.
 
 **Rationale:** recovery that is rehearsed is recovery that works; the drill time is a portfolio metric.
 
@@ -57,10 +57,10 @@ Terraform creates only what must exist before Kubernetes: the cluster and the Ar
 ## Additional Constraints
 
 - **Cost:** $0 recurring. Free tiers and local tools only.
-- **Hardware budget:** Mac mini M4 16 GB is the cluster host, with at most 12 GB allotted to containers. MacBook Air M4 16 GB runs local models. Intel MacBook Pro 8 GB runs Jenkins and SonarQube only.
+- **Hardware budget:** two machines. Mac mini M4 16 GB is the cluster host and the Jenkins build agent, with at most 12 GB allotted to containers. MacBook Air M4 16 GB runs local models and the Jenkins controller, as its own standard account.
 - **Architecture:** all runtime images are linux/arm64.
 - **Languages:** Python (FastAPI) and Java (Spring Boot) for services; Python for AIOps components; HCL for infrastructure.
-- **CI split:** GitHub Actions builds and publishes application images; Jenkins runs infrastructure lifecycle pipelines.
+- **CI split:** GitHub Actions builds and publishes application images and runs code analysis on SonarQube Cloud's free plan; Jenkins runs infrastructure lifecycle pipelines.
 
 ## Development Workflow
 
@@ -74,4 +74,4 @@ Terraform creates only what must exist before Kubernetes: the cluster and the Ar
 
 This constitution supersedes conflicting practices in any spec, plan or task list. A plan's Constitution Check MUST pass, or any violation MUST be justified in its Complexity Tracking table. Amendments require an ADR, an updated Sync Impact Report and a version bump: MAJOR for removing or redefining a principle, MINOR for adding one, PATCH for wording.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.2.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-30
