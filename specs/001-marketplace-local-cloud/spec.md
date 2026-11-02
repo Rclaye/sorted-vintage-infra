@@ -9,7 +9,7 @@
 
 ### Session 2026-10-29
 
-- Q: How do sellers get paid in v1? → A: Stripe Connect Express in test mode. Sellers onboard a connected account before their first listing goes live; each payment carries the platform fee and routes the remainder to the seller.
+- Q: How do sellers get paid in v1? → A: Stripe Connect in test mode, with Stripe-hosted onboarding (Accounts v2 since 2026-11-01, research R17). Sellers onboard a connected account before their first listing goes live; each payment carries the platform fee and routes the remainder to the seller.
 - Q: Are offers and counter-offers in v1? → A: No. Buy-now at asking price only; offers are a post-Gate 5 case study.
 - Q: Frontend approach? → A: Server-rendered pages from the BFF (Jinja templates with HTMX). Recorded here as a plan input.
 - Q: How are dev and prod separated? → A: Two namespaces in one Kind cluster, each with its own data stores. Recorded here as a plan input.
@@ -167,7 +167,7 @@ The platform engineer creates a new service from the service template, opens one
 - **FR-011**: Payment confirmation MUST be idempotent: repeated or out-of-order provider events produce exactly one final order state.
 - **FR-012**: Each paid order MUST produce ledger entries for the platform fee and the seller's share. The platform fee is a configurable percentage, defaulting to 10%.
 - **FR-013**: Purchases MUST be at the asking price; offers and counter-offers are out of scope for v1.
-- **FR-014**: Sellers MUST complete Stripe Connect Express onboarding in test mode before a listing can be published; each payment MUST deduct the platform fee and route the seller's share to their connected account.
+- **FR-014**: Sellers MUST complete Stripe-hosted Connect onboarding in test mode before a listing can be published; each payment MUST deduct the platform fee and route the seller's share to their connected account.
 
 **Notifications**
 - **FR-015**: The seller MUST be emailed when their item sells, and the buyer MUST be emailed an order confirmation.

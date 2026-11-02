@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build the version 1 marketplace (accounts, listings with photos, buy-now checkout with Stripe Connect Express in test mode, email notifications) as five services, and the local platform that runs it: a Kind cluster on the Mac mini built by Terraform, delivered by Argo CD from a GitOps repository, with images built by GitHub Actions on arm64 runners. Every service ships with metrics, logs and traces from day one, and a traffic generator keeps the platform busy so later projects have baselines to learn from.
+Build the version 1 marketplace (accounts, listings with photos, buy-now checkout with Stripe Connect in test mode, email notifications) as five services, and the local platform that runs it: a Kind cluster on the Mac mini built by Terraform, delivered by Argo CD from a GitOps repository, with images built by GitHub Actions on arm64 runners. Every service ships with metrics, logs and traces from day one, and a traffic generator keeps the platform busy so later projects have baselines to learn from.
 
 ## Technical Context
 
@@ -26,9 +26,9 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 | Service split | BFF (pages + session), Listings, Orders, Payments, Notifications | Gives a synchronous checkout chain and an asynchronous event path (Constitution VII) |
 | Frontend | Server-rendered Jinja + HTMX in the BFF | Clarification 2026-10-29; no separate frontend build |
 | Auth | Keycloak, one instance, one realm per environment; BFF does the OIDC code flow and holds the session; services validate JWTs | One identity system, separate users per environment, and real token-expiry failures |
-| Payments | Stripe Connect Express, destination charges with an application fee; Account Links for onboarding; PaymentIntents with the Payment Element | Clarification 2026-10-29; the traffic generator can confirm PaymentIntents without a browser (research R6) |
+| Payments | Stripe Connect with Accounts v2 (`dashboard: none`, Stripe as losses collector), destination charges with an application fee; Stripe-hosted onboarding through Account Links (research R17); PaymentIntents with the Payment Element | Clarification 2026-10-29; the traffic generator can confirm PaymentIntents without a browser (research R6) |
 | Stripe accounts | One test-mode sandbox per environment | Each `stripe listen` receives every event on its account, so a shared account would cross dev and prod (research R3) |
-| Webhooks into the lab | A `stripe listen --forward-to … --forward-connect-to …` Deployment in each namespace | The lab has no public ingress (Constitution VI); research R4 |
+| Webhooks into the lab | A forwarder Deployment in each namespace with two `stripe listen` containers: platform snapshot events and connected-account thin events, one signing secret | The lab has no public ingress (Constitution VI); research R4 |
 | Missed events | Payments reconciles pending orders and onboarding status against Stripe at startup and every 5 minutes | Events sent while the lab is off are never forwarded (research R5) |
 | Double-sell protection | Conditional update `available → reserved` in Listings, with a reservation row and 10-minute expiry sweeper | Single source of truth for item state (FR-009) |
 | Idempotency | Payments stores each Stripe event once (inbox, unique on event ID) and applies it with retries; Orders validates state transitions and publishes through an outbox | FR-011; no lost events or dual writes when a service restarts mid-checkout (research R8) |

@@ -34,7 +34,7 @@ make rebuild
 
 1. Open `https://dev.sortedvtg.lan:8443`, sign up with a new email, and confirm it from the Mailpit inbox at `https://mail.sortedvtg.lan:8443`.
 2. Go to **Sell an item**, fill in the form and add two photos, then publish.
-3. You are redirected to Stripe Express onboarding. Complete it with Stripe's test values and return to the site.
+3. You are redirected to Stripe-hosted onboarding. Complete it with Stripe's test values and return to the site.
 4. The listing publishes.
 5. In a private window (signed out), search for the brand.
 

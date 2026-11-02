@@ -7,4 +7,11 @@ brew "helm"
 brew "gh"
 brew "pre-commit"
 brew "gitleaks"
+# Sprint 1 (Ticket 1.1), installed on the mini by its admin account; bot runs them
+tap "stripe/stripe-cli"
+brew "mkcert"
+brew "stripe/stripe-cli/stripe"
+brew "kyverno"
+brew "tfsec"
+brew "openjdk@21"  # Jenkins agent; keg-only, used by full path /opt/homebrew/opt/openjdk@21/bin/java
 # Container runtime: Docker Desktop, installed separately (OrbStack is a lighter alternative if memory gets tight)
