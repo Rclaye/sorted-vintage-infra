@@ -194,7 +194,7 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
-        url: { type: string, description: "Presigned or proxied MinIO URL" }
+        url: { type: string, description: "Presigned or proxied S3 URL (Garage)" }
         content_type: { type: string }
         position: { type: integer }
     Reservation:

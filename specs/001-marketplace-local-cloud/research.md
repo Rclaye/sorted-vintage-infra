@@ -75,7 +75,7 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 
 ## R10. Database backups with CloudNativePG
 
-- **Decision**: use the Barman Cloud Plugin (`ObjectStore` resource, cluster `plugins` section, `Backup` with `method: plugin`) writing to MinIO, rather than the in-tree `spec.backup.barmanObjectStore`. Add cert-manager to `gitops/platform/`, because the plugin needs it.
+- **Decision**: use the Barman Cloud Plugin (`ObjectStore` resource, cluster `plugins` section, `Backup` with `method: plugin`) writing to Garage (R19), rather than the in-tree `spec.backup.barmanObjectStore`. Add cert-manager to `gitops/platform/`, because the plugin needs it.
 - **Rationale**: in-tree Barman Cloud support has been deprecated since CloudNativePG 1.26 and is scheduled for removal ([migration guide](https://cloudnative-pg.io/plugin-barman-cloud/docs/migration/)). The removal version has moved several times, and recent release notes point to 1.31. Starting on the plugin avoids a forced migration mid-program.
 - **Cost**: about 0.15 GB for cert-manager and the plugin. The memory budget in the plan is updated.
 - **Session end**: no backup is created at the end of a session, because creating a `Backup` from `make down` would be a cluster write outside Argo CD (Principle I). Instead, see R14.
@@ -101,7 +101,7 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 ## R14. Backing up at session end without writing to the cluster
 
 - **Decision**: continuous WAL archiving through the Barman Cloud Plugin, with `archive_timeout` set to 60 seconds in each `Cluster`, plus a daily `ScheduledBackup` with `immediate: true` for the base backup. All of these are declared in Git. `make down` writes nothing to the cluster; it only reads. It waits until each `Cluster` reports continuous archiving as working and its most recent archived WAL is no older than 2 × `archive_timeout`, waits one more `archive_timeout`, then stops the node.
-- **Rationale**: Principle I forbids anyone changing cluster state outside a Git commit applied by Argo CD, and that includes creating a `Backup` from a Makefile. With continuous archiving the data is already in MinIO when the session ends, so the session-end step becomes a read-only check that the archive is current. The recovery point is at most about one minute of writes, all of them synthetic.
+- **Rationale**: Principle I forbids anyone changing cluster state outside a Git commit applied by Argo CD, and that includes creating a `Backup` from a Makefile. With continuous archiving the data is already in object storage when the session ends, so the session-end step becomes a read-only check that the archive is current. The recovery point is at most about one minute of writes, all of them synthetic.
 - **Reading of FR-023**: "backed up when a session ends" is met by archiving that is current when the session ends, rather than by a separate backup job. The restore demonstration in the drill is unchanged.
 - **Spike (Sprint 1, during T021)**: confirm where the plugin reports the last archived WAL time (the `Cluster` condition `ContinuousArchiving` and the `ObjectStore` status are the candidates), and that `archive_timeout` can be set in `spec.postgresql.parameters`. Write the field names into T013.
 - **Alternatives considered**: commit a timestamped `Backup` manifest to the GitOps repo from `make down` (meets Principle I, but every session would need a pull request to a protected branch); record a session-end `Backup` as an exception to Principle I (keeps the simplest script, but makes the first exception to the rule the whole program depends on); hourly `ScheduledBackup` only (loses up to an hour of data).
@@ -125,10 +125,10 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 
 ## R16. Keycloak's database
 
-- **Decision**: Keycloak stores its data in its own CloudNativePG `Cluster`, `keycloak-db`, in the `keycloak` namespace: one instance, a `keycloak` database, continuous WAL archiving and a daily `ScheduledBackup` through the Barman Cloud Plugin, like the service databases (R10, R14). Its `ObjectStore` writes to the prod MinIO's `backups` bucket under the prefix `keycloak/`. The restore mode committed in `gitops/platform/postgres/` (T076) selects `bootstrap.recovery` for `keycloak-db` as well, so the rebuild drill restores accounts with the orders that reference them. Realms are imported from JSON with the strategy `IGNORE_EXISTING`, so a restored database is never overwritten by the import.
+- **Decision**: Keycloak stores its data in its own CloudNativePG `Cluster`, `keycloak-db`, in the `keycloak` namespace: one instance, a `keycloak` database, continuous WAL archiving and a daily `ScheduledBackup` through the Barman Cloud Plugin, like the service databases (R10, R14). Its `ObjectStore` writes to the prod Garage's `backups` bucket under the prefix `keycloak/`. The restore mode committed in `gitops/platform/postgres/` (T076) selects `bootstrap.recovery` for `keycloak-db` as well, so the rebuild drill restores accounts with the orders that reference them. Realms are imported from JSON with the strategy `IGNORE_EXISTING`, so a restored database is never overwritten by the import.
 - **Rationale**: without a persistent database Keycloak keeps users only for the life of its pod, so accounts would vanish on stop and start (FR-024) and on every rebuild, and every `buyer_sub`, `seller_sub` and `account_sub` in the service databases would point at nobody. FR-023 asks for the data stores to be backed up and restored; Keycloak's is one of them.
 - **Cost**: about 0.25 GB for one more Postgres instance. The memory budget in the plan is updated.
-- **Alternatives considered**: a `keycloak` database inside the `sv-prod` `Cluster` (no extra instance, but the shared identity store would live inside one environment's database and be restored with prod only); Keycloak's built-in dev storage on a persistent volume (not supported for production use, and outside the backup and restore path); a MinIO in the `keycloak` namespace (another 0.2 GB for one small archive).
+- **Alternatives considered**: a `keycloak` database inside the `sv-prod` `Cluster` (no extra instance, but the shared identity store would live inside one environment's database and be restored with prod only); Keycloak's built-in dev storage on a persistent volume (not supported for production use, and outside the backup and restore path); an object store in the `keycloak` namespace (another 0.2 GB for one small archive).
 
 ## R17. Connected accounts on Accounts v2
 
@@ -139,6 +139,22 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Trade-offs accepted**: sellers get no Stripe dashboard; the marketplace shows payout status itself. Each thin event costs one API call to fetch the account. Payments handles two event shapes, v1 snapshots for payments and thin events for accounts.
 - **Alternatives considered**: enabling "Accounts v1 support" in each sandbox's Dashboard (keeps the original design, but builds on a path Stripe tells new integrations to avoid); the platform as losses collector, which allows the Express dashboard (needs the platform to take on liability for sellers' losses, a risk setting not wanted for a lab); `dashboard: full` (the seller owns the whole Stripe relationship, a poorer fit for a marketplace that sets the fee and routes the funds).
 - **Evidence**: [spikes.md, T009](../../sprints/sprint-1/spikes.md#t009-stripe-signing-secrets-research-r3-r4).
+
+## R18. Ingress controller: Traefik
+
+- **Decision**: Traefik, installed by Argo CD from its Helm chart in namespace `traefik`, as a single replica pinned to the Kind node with `hostPort` 80 and 443, so Kind's loopback port mappings (R2) reach it. The mkcert `*.sortedvtg.lan` certificate (T012) is its default TLS certificate, through a `TLSStore` named `default`. Routes are standard Kubernetes `Ingress` objects with `ingressClassName: traefik`, so the services stay portable to Gateway API later.
+- **Rationale**: the plan used ingress-nginx, which the Kubernetes project retired in March 2026: no more releases, bug fixes or security patches ([Ingress NGINX retirement](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/)). A front door with no security fixes contradicts Principle VI. Traefik is maintained, needs about 0.1 GB, serves both `Ingress` and Gateway API, and binds to the node's ports with `hostPort` without extra configuration.
+- **Cost**: $0; about 0.1 GB, within the plan's ingress row.
+- **Alternatives considered**: keeping ingress-nginx (works, but unpatched); Envoy Gateway (Gateway API native, but it creates its proxies dynamically, so pinning them to the Kind node's ports takes extra configuration, and it uses more memory).
+
+## R19. Object storage: Garage
+
+- **Decision**: Garage, an S3-compatible object store, one single-node instance per environment namespace (`sv-dev`, `sv-prod`) with `replication_factor = 1`. Its metadata and data live on the Kind `extraMounts` path `/var/lab-data/garage-<env>`, outside the cluster lifecycle, so photos and backups survive the rebuild drill. Each instance has buckets `photos` and `backups`. Keycloak's database backs up to the prod instance's `backups` bucket under `keycloak/` (R16).
+- **Configuration**: Garage's layout, buckets and keys are set through its CLI, not by its Helm chart, so an idempotent Argo CD `PostSync` Job applies them. This is a recorded exception to Principle VIII, with its limits, in the plan's Complexity Tracking. The S3 access keys, the RPC secret and the admin token come from Secrets that Terraform creates from `secrets.auto.tfvars` (T012); the Job imports the keys with `garage key import`, so a rebuilt instance gets the same keys and nothing is generated inside the cluster.
+- **Rationale**: the plan used MinIO, whose community edition went into maintenance mode in December 2025 after it stopped publishing images and binaries in October 2025, and whose repository was later archived ([MinIO CE in 2026](https://glukhov.org/data-infrastructure/object-storage/minio-dead/)). Garage is maintained, ships as a single binary built for self-hosting, and uses little memory.
+- **Cost**: $0; about 0.1 GB per instance, less than the MinIO estimate in the plan.
+- **Spike (Sprint 1, T022)**: confirm a CloudNativePG base backup and WAL archive through the Barman Cloud Plugin land in Garage, and that a `bootstrap.recovery` cluster restores from them. If the plugin needs an S3 feature Garage lacks, use SeaweedFS instead.
+- **Alternatives considered**: SeaweedFS (mature S3 API, but several components and more memory); the community fork `pgsty/minio` (keeps MinIO alive, but it is a small independent fork whose name may change); MinIO from source (unmaintained upstream).
 
 ---
 
@@ -154,7 +170,9 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R14 | `make down` only checks that WAL archiving is current; it creates no `Backup` |
 | R15 | Jenkins controller on the Air, as its own standard account `ricomillz`, bound to loopback, building `main` only; the lab and the agent run as the mini's standard account `bot`; SonarQube Cloud for code quality; the Intel Mac leaves the lab |
 | R4, R17 | Payments row: connected accounts on Accounts v2 with Stripe-hosted onboarding; webhooks row: the forwarder runs a snapshot and a thin-event `stripe listen` |
-| R16 | Keycloak's database is its own CloudNativePG `Cluster` in the `keycloak` namespace, archived to the prod MinIO and restored in the drill; memory row updated |
+| R18 | Ingress is Traefik in namespace `traefik`; ingress-nginx is retired |
+| R19 | Object storage is Garage per environment on `/var/lab-data/garage-<env>`; MinIO's community edition is archived |
+| R16 | Keycloak's database is its own CloudNativePG `Cluster` in the `keycloak` namespace, archived to the prod Garage and restored in the drill; memory row updated |
 
 ## Tasks
 

@@ -21,7 +21,7 @@ variable "ingress_listen_address" {
 }
 
 variable "lab_data_dir" {
-  description = "Host directory mounted into the node at /var/lab-data for MinIO data and backups."
+  description = "Host directory mounted into the node at /var/lab-data for Garage data (photos and backups)."
   type        = string
   default     = "~/sv-data"
 }

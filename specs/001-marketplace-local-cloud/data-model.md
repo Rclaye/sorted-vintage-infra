@@ -81,7 +81,7 @@ draft ──publish──▶ available ──reserve──▶ reserved ──con
 | --- | --- | --- |
 | id | UUID | |
 | listing_id | UUID | References Listing |
-| storage_key | string | MinIO key `listings/<listing_id>/<photo_id>` |
+| storage_key | string | S3 key in the `photos` bucket (Garage), `listings/<listing_id>/<photo_id>` |
 | content_type | enum | `image/jpeg`, `image/png`, `image/webp`; checked from file bytes, not the file name (FR-005) |
 | size_bytes | integer | At most 10,485,760 |
 | position | integer | 0–7; unique per listing |

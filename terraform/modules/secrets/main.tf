@@ -31,9 +31,10 @@ resource "kubernetes_namespace_v1" "env" {
   }
 }
 
-resource "kubernetes_namespace_v1" "ingress_nginx" {
+# Traefik serves this certificate as its default (research R18).
+resource "kubernetes_namespace_v1" "traefik" {
   metadata {
-    name = "ingress-nginx"
+    name = "traefik"
   }
 }
 
@@ -72,7 +73,7 @@ resource "kubernetes_secret_v1" "db" {
 resource "kubernetes_secret_v1" "tls" {
   metadata {
     name      = "sortedvtg-lan-tls"
-    namespace = kubernetes_namespace_v1.ingress_nginx.metadata[0].name
+    namespace = kubernetes_namespace_v1.traefik.metadata[0].name
   }
 
   type = "kubernetes.io/tls"
