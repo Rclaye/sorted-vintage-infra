@@ -83,3 +83,35 @@ Command details, because the CLI's v2 syntax is not obvious:
 - **`stripe listen` needs the events named** (`--events`, `--all-snapshot` or `--all-thin`). The R4 Deployment must pass `--events` with the list Payments handles.
 - **`localhost` resolves to `::1` first** for the CLI's forwarder. Forward to `127.0.0.1` or a Service name, never `localhost`.
 - **The mini's firewall drops loopback connections to apps not on its allow list.** Homebrew's Python was dropped even on `127.0.0.1`; `/usr/bin/python3` is allowed. This affects only processes on macOS; the forwarder will run inside the cluster.
+
+## T022: CloudNativePG backup and restore against Garage (research R19)
+
+**Result: pass.** 2026-11-02, on a throwaway Kind cluster `sv-spike` on the mini, as `bot`, with the same manifests and chart versions as `sorted-vintage-gitops/platform/garage` and `platform/postgres`: Garage v2.5.0, cert-manager v1.21.3, CloudNativePG chart 0.29.1 (operator 1.30.1), Barman Cloud Plugin chart 0.8.1 (v0.15.1). The cluster was deleted afterwards.
+
+### Garage and its setup Job
+
+| Check | Result |
+| --- | --- |
+| Setup Job, first run | Applied the one-node layout, imported both S3 keys, created `photos` and `backups`, granted each key its bucket |
+| Setup Job, second run | Changed nothing: every step reported `present`, and re-granting is harmless |
+| Garage restart | Both buckets still there, read back from the host path `/var/lab-data/garage-dev` |
+
+Finding: Garage's `/health` passes only once a layout exists, and the layout is applied by the setup Job, which needs the pod Ready first. An HTTP readiness probe on `/health` deadlocks, in a plain cluster and in Argo CD alike (PostSync hooks wait for a Healthy StatefulSet). The readiness probe is a TCP check on the admin port; the Job owns layout health.
+
+### Postgres backup and restore
+
+| Check | Result |
+| --- | --- |
+| Cluster `pg` with the plugin as WAL archiver | `Ready`, `ContinuousArchiving=True` |
+| `Database` resources `orders`, `payments`, `notifications` and managed roles | Created, `applied: true` |
+| Immediate base backup from the `ScheduledBackup` | `completed`, method `plugin` |
+| WAL reaching Garage after a write | About 60 s, in line with `archive_timeout: 60s` |
+| Restore into a new cluster with `bootstrap.recovery` from the same `ObjectStore` | All 3 rows (one from the base backup, two from archived WAL only), all 4 databases and all 4 roles |
+
+The first restore attempt started 40 s after the last write and correctly stopped at the last WAL segment then in Garage; it was retried once that segment had been archived. Restoring right after a write needs the archive to catch up first, which `make down`'s check already provides (research R14).
+
+### Findings for later tasks
+
+- **Last archived WAL time (needed by T013).** The `ObjectStore` status has only the recovery window (`serverRecoveryWindow.<cluster>.firstRecoverabilityPoint`, `lastSuccessfulBackupTime`); the `Cluster` status has the `ContinuousArchiving` condition but no archive time. The time comes from Postgres: `select last_archived_wal, last_archived_time, failed_count from pg_stat_archiver` on the primary. `make down` checks that condition and that `last_archived_time` is under 120 s old.
+- **Recovery creates an extra `app` database** unless told otherwise. The recovery overlay in T076 sets `bootstrap.recovery.database: listings` and `owner: listings`.
+- **StatefulSets do not replace a pod that never became Ready**, so a fix to a broken readiness probe needs that pod deleted once. Not an issue on a fresh install.
