@@ -125,3 +125,21 @@ Docker Desktop shares `~/sv-data` into the Kind node through `virtiofs`. Inside 
 - The Garage `own-data` init container, which ran as root to `chown` the path, is removed; Garage runs as uid 1000 and creates `meta/` and `data/` itself.
 - The flip side: any pod that mounts `/var/lab-data` can write all of it. The control is admission: only Garage's PersistentVolumes may use `hostPath` (added to T026).
 - This holds for Docker Desktop on macOS. On a Linux host, a bind mount enforces ownership, and the folders would need creating with uid 1000 as owner.
+
+## T019, T020: Observability round trip and memory
+
+**Result: pass.** 2026-11-03, on a throwaway Kind cluster `sv-spike`, as `bot`, with the exact values in `sorted-vintage-gitops/platform/observability`: kube-prometheus-stack 92.17.0, Loki 7.5.0 (single binary), Tempo 1.24.4, OpenTelemetry Collector 0.178.1 (contrib image). The cluster was deleted afterwards.
+
+| Check | Result |
+| --- | --- |
+| All four charts install and every pod runs | Yes, 9 pods |
+| OTLP over HTTP into the collector: one trace, one log, one metric | All 200 |
+| Metric read back from Prometheus (OTLP receiver) | `spike_requests_total` |
+| Log read back from Loki by `service_name` | Found |
+| Trace read back from Tempo by `service.name` | Found |
+| Grafana's admin password | From the Terraform Secret `grafana-admin`, not the chart default |
+| Memory added by the stack | About 2.1 GiB (0.62 to 2.68 GiB), within the plan's 2.3 GB |
+
+On the lab that puts the cluster at about 6.0 of 11.9 GiB after Ticket 1.3's part 5.
+
+Finding: Argo CD's metrics Service is labelled `app.kubernetes.io/name: argocd-metrics`, not `argocd-application-controller`; the ServiceMonitor for the drift alerts (T111) selects on that label.
