@@ -7,6 +7,10 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 3.4"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7"
+    }
   }
 }
 
@@ -127,5 +131,32 @@ resource "kubernetes_secret_v1" "s3_backups" {
   data = {
     "ACCESS_KEY_ID"     = var.garage[each.key].backups_key_id
     "ACCESS_SECRET_KEY" = var.garage[each.key].backups_secret_key
+  }
+}
+
+# Observability (T019): the namespace exists before Argo CD syncs the stack, because Grafana's
+# admin Secret has to be in it. The password is generated here and never committed; the chart's
+# well-known default is never used. Read it with:
+#   kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
+resource "kubernetes_namespace_v1" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+}
+
+resource "random_password" "grafana_admin" {
+  length  = 32
+  special = false
+}
+
+resource "kubernetes_secret_v1" "grafana_admin" {
+  metadata {
+    name      = "grafana-admin"
+    namespace = kubernetes_namespace_v1.monitoring.metadata[0].name
+  }
+
+  data = {
+    "admin-user"     = "admin"
+    "admin-password" = random_password.grafana_admin.result
   }
 }
