@@ -56,6 +56,7 @@ module "secrets" {
   source = "../modules/secrets"
 
   environments    = var.environments
+  garage          = var.garage
   tls_certificate = var.tls_certificate
   tls_private_key = var.tls_private_key
 }
@@ -67,6 +68,19 @@ variable "environments" {
     stripe_publishable_key = string
     stripe_webhook_secret  = string
     db_passwords           = map(string)
+  }))
+  sensitive = true
+}
+
+variable "garage" {
+  description = "Per environment: Garage RPC secret, admin token and S3 keys. Set in secrets.auto.tfvars (scripts/secrets/add-garage-secrets.sh)."
+  type = map(object({
+    rpc_secret         = string
+    admin_token        = string
+    photos_key_id      = string
+    photos_secret_key  = string
+    backups_key_id     = string
+    backups_secret_key = string
   }))
   sensitive = true
 }

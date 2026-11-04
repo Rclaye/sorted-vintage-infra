@@ -83,3 +83,49 @@ resource "kubernetes_secret_v1" "tls" {
     "tls.key" = var.tls_private_key
   }
 }
+
+# Garage per environment (research R19): the server's RPC secret and admin token, and one S3 key
+# per consumer. The setup Job imports the keys, so a rebuilt instance keeps the same credentials.
+resource "kubernetes_secret_v1" "garage_admin" {
+  for_each = local.env_names
+
+  metadata {
+    name      = "garage-admin"
+    namespace = kubernetes_namespace_v1.env[each.key].metadata[0].name
+  }
+
+  data = {
+    "rpc-secret"  = var.garage[each.key].rpc_secret
+    "admin-token" = var.garage[each.key].admin_token
+  }
+}
+
+# Listings writes photos with this key.
+resource "kubernetes_secret_v1" "s3_photos" {
+  for_each = local.env_names
+
+  metadata {
+    name      = "s3-photos"
+    namespace = kubernetes_namespace_v1.env[each.key].metadata[0].name
+  }
+
+  data = {
+    "ACCESS_KEY_ID"     = var.garage[each.key].photos_key_id
+    "ACCESS_SECRET_KEY" = var.garage[each.key].photos_secret_key
+  }
+}
+
+# CloudNativePG's Barman Cloud Plugin archives WAL and base backups with this key.
+resource "kubernetes_secret_v1" "s3_backups" {
+  for_each = local.env_names
+
+  metadata {
+    name      = "s3-backups"
+    namespace = kubernetes_namespace_v1.env[each.key].metadata[0].name
+  }
+
+  data = {
+    "ACCESS_KEY_ID"     = var.garage[each.key].backups_key_id
+    "ACCESS_SECRET_KEY" = var.garage[each.key].backups_secret_key
+  }
+}
