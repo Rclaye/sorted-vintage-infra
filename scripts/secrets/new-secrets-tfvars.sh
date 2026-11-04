@@ -5,6 +5,7 @@
 #   - one database password per environment and database
 #   - an mkcert certificate for *.sortedvtg.lan (the mkcert CA stays in bot's CAROOT; it is not installed here)
 #   - Garage's RPC secret, admin token and S3 keys, through add-garage-secrets.sh
+#   - Keycloak's admin and database passwords and client secrets, through add-keycloak-secrets.sh
 # Nothing secret is printed. It refuses to overwrite an existing file.
 # From the Air (quoted, so ~ is bot's home on the mini, not yours on the Air):
 #   ssh -t mac-mini-lab '~/Sorted-Vintage/src/sorted-vintage-infra/scripts/secrets/new-secrets-tfvars.sh'
@@ -73,4 +74,5 @@ mkcert -cert-file "$TMP/tls.crt" -key-file "$TMP/tls.key" "*.sortedvtg.lan" "sor
 install -m 600 "$TMP/out" "$OUT"
 echo "Wrote $OUT (mode 600). No values were shown."
 "$ROOT/scripts/secrets/add-garage-secrets.sh"
+"$ROOT/scripts/secrets/add-keycloak-secrets.sh"
 echo "The mkcert CA is in $(mkcert -CAROOT); trusting it on the Air is part of docs/runbooks/lab-session.md (T015)."

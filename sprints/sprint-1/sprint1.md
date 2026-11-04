@@ -128,7 +128,7 @@ Implementation Requirements:
     - `down`: read-only. Wait until each CloudNativePG `Cluster` reports continuous archiving as working and its last archived WAL is no older than 120 seconds, wait 60 more seconds, then stop the node container. It creates nothing in the cluster (research R14).
     - `rebuild`: `terraform apply` for `cluster` then `bootstrap`, then wait for health.
     - `destroy`: `terraform destroy` for `bootstrap` then `cluster`. The Garage data on `~/sv-data` is kept.
-- T015 `docs/runbooks/lab-session.md`: logging in as `bot` at the mini's screen, the SSH tunnel, the `/etc/hosts` entries on the Air (`dev`, `prod`, `grafana`, `argocd`, `mail` under `sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`. Link it from `docs/runbooks/remote-access.md`.
+- T015 `docs/runbooks/lab-session.md`: logging in as `bot` at the mini's screen, the SSH tunnel, the `/etc/hosts` entries on the Air (`dev`, `prod`, `grafana`, `argocd`, `mail`, `auth` under `sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`. Link it from `docs/runbooks/remote-access.md`.
 
 Acceptance Criteria Verification:
 - `make down` then `make up` returns every app to `Healthy` in under 10 minutes, and the Grafana history from before the stop is still there.

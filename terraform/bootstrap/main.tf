@@ -61,6 +61,7 @@ module "secrets" {
 
   environments    = var.environments
   garage          = var.garage
+  keycloak        = var.keycloak
   tls_certificate = var.tls_certificate
   tls_private_key = var.tls_private_key
 }
@@ -86,6 +87,16 @@ variable "garage" {
     backups_key_id     = string
     backups_secret_key = string
   }))
+  sensitive = true
+}
+
+variable "keycloak" {
+  description = "Keycloak admin and database passwords and client secrets. Set in secrets.auto.tfvars (scripts/secrets/add-keycloak-secrets.sh)."
+  type = object({
+    admin_password = string
+    db_password    = string
+    clients        = map(map(string))
+  })
   sensitive = true
 }
 
