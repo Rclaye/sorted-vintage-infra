@@ -115,3 +115,13 @@ The first restore attempt started 40 s after the last write and correctly stoppe
 - **Last archived WAL time (needed by T013).** The `ObjectStore` status has only the recovery window (`serverRecoveryWindow.<cluster>.firstRecoverabilityPoint`, `lastSuccessfulBackupTime`); the `Cluster` status has the `ContinuousArchiving` condition but no archive time. The time comes from Postgres: `select last_archived_wal, last_archived_time, failed_count from pg_stat_archiver` on the primary. `make down` checks that condition and that `last_archived_time` is under 120 s old.
 - **Recovery creates an extra `app` database** unless told otherwise. The recovery overlay in T076 sets `bootstrap.recovery.database: listings` and `owner: listings`.
 - **StatefulSets do not replace a pod that never became Ready**, so a fix to a broken readiness probe needs that pod deleted once. Not an issue on a fresh install.
+
+## T108: Ownership on the `/var/lab-data` mount
+
+**Result: no root step needed.** 2026-11-03, on the lab cluster's node container, as `bot`.
+
+Docker Desktop shares `~/sv-data` into the Kind node through `virtiofs`. Inside the node, `/var/lab-data/garage-dev` shows as `uid=0 mode=755`, yet a fresh directory there accepted writes from uid 1000 and from an arbitrary uid 4242 without any `chown`, and on the Mac every file lands owned by `bot` (uid 502) whatever uid wrote it. The mount does not enforce ownership.
+
+- The Garage `own-data` init container, which ran as root to `chown` the path, is removed; Garage runs as uid 1000 and creates `meta/` and `data/` itself.
+- The flip side: any pod that mounts `/var/lab-data` can write all of it. The control is admission: only Garage's PersistentVolumes may use `hostPath` (added to T026).
+- This holds for Docker Desktop on macOS. On a Linux host, a bind mount enforces ownership, and the folders would need creating with uid 1000 as owner.
