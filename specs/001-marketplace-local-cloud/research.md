@@ -156,6 +156,14 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Spike (Sprint 1, T022)**: confirm a CloudNativePG base backup and WAL archive through the Barman Cloud Plugin land in Garage, and that a `bootstrap.recovery` cluster restores from them. If the plugin needs an S3 feature Garage lacks, use SeaweedFS instead.
 - **Alternatives considered**: SeaweedFS (mature S3 API, but several components and more memory); the community fork `pgsty/minio` (keeps MinIO alive, but it is a small independent fork whose name may change); MinIO from source (unmaintained upstream).
 
+## R20. Policy engine API: Kyverno ValidatingPolicy
+
+- **Decision**: Kyverno 1.19.2 (chart 3.9.2) with the policies written as `policies.kyverno.io/v1` `ValidatingPolicy` (CEL), not `kyverno.io/v1` `ClusterPolicy`. Kyverno generates the matching checks for Deployments, StatefulSets, DaemonSets, ReplicaSets, Jobs and CronJobs from each pod rule. The same files run at admission (Argo CD app `kyverno-policies`) and in the GitOps `checks` workflow (`kyverno test` and `kyverno apply`).
+- **Rationale**: Kyverno 1.19 deprecates the legacy `kyverno.io` policy types and returns an admission warning for each; 1.20 (in release candidate in November 2026) removes them ([kyverno#16868](https://github.com/kyverno/kyverno/pull/16868)). Writing `ClusterPolicy` now would mean a rewrite at the next upgrade.
+- **Exclusions**: platform namespaces by `namespaceSelector`; the data stores inside `sv-dev` and `sv-prod` by label, each bound to its own upstream image, so the label alone lets no other image in. Every exclusion is listed with its reason in the policy file. Rules are never turned to audit mode.
+- **Cost**: $0. Admission and background controllers only (cleanup and reports controllers off, background scans off), within the plan's 0.4 GB.
+- **Alternatives considered**: `ClusterPolicy` (deprecated, see above); native `ValidatingAdmissionPolicy` alone (no CLI test harness for the CI half of FR-027).
+
 ---
 
 ## Plan changes from this research
@@ -172,6 +180,7 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R4, R17 | Payments row: connected accounts on Accounts v2 with Stripe-hosted onboarding; webhooks row: the forwarder runs a snapshot and a thin-event `stripe listen` |
 | R18 | Ingress is Traefik in namespace `traefik`; ingress-nginx is retired |
 | R19 | Object storage is Garage per environment on `/var/lab-data/garage-<env>`; MinIO's community edition is archived |
+| R20 | Kyverno policies are `ValidatingPolicy` (CEL); the legacy `ClusterPolicy` type is removed in Kyverno 1.20 |
 | R16 | Keycloak's database is its own CloudNativePG `Cluster` in the `keycloak` namespace, archived to the prod Garage and restored in the drill; memory row updated |
 
 ## Tasks
