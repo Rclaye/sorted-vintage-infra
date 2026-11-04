@@ -45,6 +45,10 @@ resource "helm_release" "argocd" {
         EOT
       }
     }
+    # Metrics Services only; the ServiceMonitor lives in Git (gitops platform/argocd/monitoring),
+    # because its CRD arrives with kube-prometheus-stack after Terraform has finished (T111).
+    controller    = { metrics = { enabled = true } }
+    server        = { metrics = { enabled = true } }
     dex           = { enabled = false }
     notifications = { enabled = false }
   })]
