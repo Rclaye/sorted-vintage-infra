@@ -53,3 +53,22 @@ variable "garage" {
     error_message = "Garage needs a 64-hex-character RPC secret, an admin token of 32+ characters, key IDs of the form GK + 24 hex characters, and 64-hex-character secret keys."
   }
 }
+
+variable "keycloak" {
+  description = "Keycloak's bootstrap admin password, keycloak-db password, and per realm (dev, prod) the client secrets for bff, orders, payments and listings (T025)."
+  type = object({
+    admin_password = string
+    db_password    = string
+    clients        = map(map(string))
+  })
+  sensitive = true
+
+  validation {
+    condition = (
+      length(var.keycloak.admin_password) >= 32 && length(var.keycloak.db_password) >= 32 &&
+      alltrue([for env in ["dev", "prod"] : alltrue([for c in ["bff", "orders", "payments", "listings"] :
+      length(lookup(lookup(var.keycloak.clients, env, {}), c, "")) >= 32])])
+    )
+    error_message = "Keycloak needs admin and database passwords of 32+ characters and a 32+ character secret for bff, orders, payments and listings in both dev and prod."
+  }
+}

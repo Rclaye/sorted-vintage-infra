@@ -160,3 +160,78 @@ resource "kubernetes_secret_v1" "grafana_admin" {
     "admin-password" = random_password.grafana_admin.result
   }
 }
+
+# Keycloak (T025, research R16): one instance with a realm per environment, in its own namespace with
+# its own Postgres (keycloak-db). The database password is fixed, so a restored keycloak-db still
+# matches it; client secrets are fixed, so the realms and the services that use them always agree.
+resource "kubernetes_namespace_v1" "keycloak" {
+  metadata {
+    name = "keycloak"
+  }
+}
+
+resource "kubernetes_secret_v1" "keycloak_admin" {
+  metadata {
+    name      = "keycloak-admin"
+    namespace = kubernetes_namespace_v1.keycloak.metadata[0].name
+  }
+
+  data = {
+    username = "admin"
+    password = var.keycloak.admin_password
+  }
+}
+
+resource "kubernetes_secret_v1" "keycloak_db" {
+  metadata {
+    name      = "pg-keycloak-app"
+    namespace = kubernetes_namespace_v1.keycloak.metadata[0].name
+  }
+
+  type = "kubernetes.io/basic-auth"
+
+  data = {
+    username = "keycloak"
+    password = var.keycloak.db_password
+  }
+}
+
+# keycloak-db archives to the prod Garage (R16), with prod's backups key.
+resource "kubernetes_secret_v1" "keycloak_s3_backups" {
+  metadata {
+    name      = "s3-backups"
+    namespace = kubernetes_namespace_v1.keycloak.metadata[0].name
+  }
+
+  data = {
+    "ACCESS_KEY_ID"     = var.garage["prod"].backups_key_id
+    "ACCESS_SECRET_KEY" = var.garage["prod"].backups_secret_key
+  }
+}
+
+# The realm import reads these as environment variables (${SV_DEV_BFF_SECRET} and so on).
+resource "kubernetes_secret_v1" "keycloak_realm_clients" {
+  metadata {
+    name      = "keycloak-realm-clients"
+    namespace = kubernetes_namespace_v1.keycloak.metadata[0].name
+  }
+
+  data = merge([
+    for env in ["dev", "prod"] : {
+      for c in ["bff", "orders", "payments", "listings"] :
+      "SV_${upper(env)}_${upper(c)}_SECRET" => var.keycloak.clients[env][c]
+    }
+  ]...)
+}
+
+# The same client secrets where each environment's services read them.
+resource "kubernetes_secret_v1" "keycloak_clients" {
+  for_each = local.env_names
+
+  metadata {
+    name      = "keycloak-clients"
+    namespace = kubernetes_namespace_v1.env[each.key].metadata[0].name
+  }
+
+  data = { for c in ["bff", "orders", "payments", "listings"] : c => var.keycloak.clients[each.key][c] }
+}

@@ -143,3 +143,23 @@ Docker Desktop shares `~/sv-data` into the Kind node through `virtiofs`. Inside 
 On the lab that puts the cluster at about 6.0 of 11.9 GiB after Ticket 1.3's part 5.
 
 Finding: Argo CD's metrics Service is labelled `app.kubernetes.io/name: argocd-metrics`, not `argocd-application-controller`; the ServiceMonitor for the drift alerts (T111) selects on that label.
+
+## T025, T109: Keycloak realms, tokens and re-import
+
+**Result: pass.** 2026-11-03, on a throwaway Kind cluster `sv-spike`, as `bot`, with the exact values and realm files in `sorted-vintage-gitops/platform/keycloak`: keycloakx chart 7.4.0 (Keycloak 26.8.1) on a CloudNativePG `keycloak-db` (WAL archiving was left out here; it was proven in T022). The cluster was deleted afterwards.
+
+| Check | Result |
+| --- | --- |
+| First start | Realms `sv-dev` and `sv-prod` imported |
+| Restart | "Realm 'sv-dev' already exists. Import skipped", and the same for `sv-prod`: a restored database is never overwritten (R16) |
+| Client-credentials tokens, both realms | `orders` gets audiences `listings`, `payments`; `payments` gets `orders`; `listings` gets `payments` (R13) |
+| Wrong client secret | Refused with 401 |
+| `bff` | Confidential, code flow, PKCE S256, redirects to `https://<env>.sortedvtg.lan[:8443]/*`, mappers `display_name` and three audiences |
+| Realm settings | Registration with email verification through that environment's Mailpit; `display_name` required, 1 to 40 characters |
+| Token issuer | `https://auth.sortedvtg.lan:8443/realms/sv-<env>` |
+| Memory added | About 1 GiB for Keycloak and `keycloak-db` |
+
+Findings:
+- Because a realm is imported only once, a mistake in a realm file would have to be fixed in the live realm. The spike is the check that the files are right before the lab imports them.
+- Tokens also carry the default `account` audience from Keycloak's built-in roles scope; services check for their own audience and ignore it.
+- The issuer includes `:8443`, the SSH tunnel's port. When Tailscale replaces the tunnel (R2), `KC_HOSTNAME` changes with it, and so does the issuer the services expect.
