@@ -163,3 +163,22 @@ Findings:
 - Because a realm is imported only once, a mistake in a realm file would have to be fixed in the live realm. The spike is the check that the files are right before the lab imports them.
 - Tokens also carry the default `account` audience from Keycloak's built-in roles scope; services check for their own audience and ignore it.
 - The issuer includes `:8443`, the SSH tunnel's port. When Tailscale replaces the tunnel (R2), `KC_HOSTNAME` changes with it, and so does the issuer the services expect.
+
+## Ticket 1.3 drift check (SC-006, T111)
+
+**Result: pass.** 2026-11-03 at 22:00, on the lab cluster, once, as the ticket asks.
+
+| Step | Result |
+| --- | --- |
+| Before | `https://argocd.sortedvtg.lan` answering 200 through Traefik |
+| `kubectl -n traefik delete deployment traefik` | Deleted by hand, outside Git |
+| Argo CD self-heal | Deployment recreated **0.6 s** later, with a new UID |
+| HTTPS through Traefik | 200 again within **1.4 s**; the terminating pod may have kept serving, so the real gap was near zero |
+| Application `traefik` | Synced, then Healthy 12 s later |
+
+Where the self-heal is recorded:
+- Events on the Application: "Partial sync operation to 42.2.0 succeeded" and "OutOfSync -> Synced". A partial, automated sync is the mark of a self-heal; a new commit gives a full sync. Kubernetes keeps events for about an hour.
+- `argocd_app_sync_total{name="traefik",phase="Succeeded"}` rose by one in Prometheus, kept for 7 days. This is the durable evidence SC-006 can cite.
+- Not in `status.history`, which lists only syncs to a new Git revision.
+
+`ArgoCDAppOutOfSync` did not fire, as intended: the drift lasted under a second, far below its 10-minute window. It exists for drift that self-heal cannot undo.
