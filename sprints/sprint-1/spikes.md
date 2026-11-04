@@ -182,3 +182,15 @@ Where the self-heal is recorded:
 - Not in `status.history`, which lists only syncs to a new Git revision.
 
 `ArgoCDAppOutOfSync` did not fire, as intended: the drift lasted under a second, far below its 10-minute window. It exists for drift that self-heal cannot undo.
+
+## T026: Kyverno policies at admission (Ticket 1.4)
+
+Run on 2026-11-03 on a throwaway Kind cluster `sv-spike` (same `kindest/node:v1.37.0` image as the lab), deleted afterwards. The lab cluster was only read.
+
+- Kyverno chart 3.9.2 (Kyverno 1.19.2) with the lab values: admission and background controllers only. All five `ValidatingPolicy` objects reported ready.
+- `kubectl apply --dry-run=server`: every file in `tests/policy/bad/` was refused by its own policy; every file in `tests/policy/good/` was accepted (Ticket 1.4 acceptance 1).
+- A claim on the default StorageClass was provisioned and bound: the local-path provisioner's hostPath PV passes `restrict-host-path-volumes`. A node-exporter-style DaemonSet with hostPath in `monitoring` was admitted.
+- `docker stop` / `docker start` of the node: Kyverno was back within 60 seconds and denying again; no deadlock (its webhooks skip `kube-system` and `kyverno`).
+- `kyverno apply policies/ --cluster` against the live lab (read-only) found the sv-* data stores without CPU limits and Garage/Mailpit without a label tying them to their upstream image; gitops PR "CPU limits and part-of labels" fixes both before enforcement starts. It also showed that the PV rule must match `CREATE` only, or the PV controller's own updates to provisioned PVs would be refused.
+- `scripts/policy-check.sh` fails when a service overlay holds a non-`ghcr.io/rclaye/` image, and when an overlay does not set `namespace: sv-<env>` (Ticket 1.4 acceptance 2, run locally; CI run pending).
+- Not measured: Kyverno's memory (crictl output changed); measure in the lab after deploy for T032.
