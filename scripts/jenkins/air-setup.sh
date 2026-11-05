@@ -30,7 +30,8 @@ fi
 JHOME="$(dscl . -read "/Users/$JUSER" NFSHomeDirectory | awk '{print $2}')"
 KEY="$JHOME/.ssh/sv_jenkins_agent"
 LOGS="$JHOME/Library/Logs/sorted-vintage"
-as_j() { sudo -u "$JUSER" -H "$@"; }
+# Run as the Jenkins account from /, because it may not enter your (closed) current folder.
+as_j() { (cd / && sudo -u "$JUSER" -H "$@"); }
 
 echo "Your home folder"
 if [[ -n "$(find "$HOME" -maxdepth 0 -perm -040)" ]]; then
@@ -66,9 +67,13 @@ echo "$PIM_SHA256  $tmpd/pim.jar" | shasum -a 256 -c - >/dev/null || { echo "Plu
 sudo install -o "$JUSER" -g staff -m 644 "$tmpd/pim.jar" "$JHOME/.jenkins/jenkins-plugin-manager.jar"
 sudo install -o "$JUSER" -g staff -m 644 "$PLUGINS" "$JHOME/.jenkins/plugins.txt"
 rm -rf "$tmpd"
-as_j "$JAVA" -jar "$JHOME/.jenkins/jenkins-plugin-manager.jar" --war "$WAR" \
-  --plugin-download-directory "$JHOME/.jenkins/plugins" --plugin-file "$JHOME/.jenkins/plugins.txt" >/dev/null
-echo "  installed the plugins in jenkins/plugins.txt and their dependencies"
+echo "  downloading the plugins in jenkins/plugins.txt and their dependencies (a few minutes)"
+if ! as_j "$JAVA" -jar "$JHOME/.jenkins/jenkins-plugin-manager.jar" --war "$WAR" \
+     --plugin-download-directory "$JHOME/.jenkins/plugins" --plugin-file "$JHOME/.jenkins/plugins.txt" \
+     > "${TMPDIR:-/tmp}/sv-plugin-install.log" 2>&1; then
+  echo "Plugin installation failed. Last lines of the log:"; tail -20 "${TMPDIR:-/tmp}/sv-plugin-install.log"; exit 1
+fi
+echo "  installed $(as_j ls "$JHOME/.jenkins/plugins" | grep -c '\.jpi$') plugins"
 
 tmp="$(mktemp)"
 cat >"$tmp" <<EOF
