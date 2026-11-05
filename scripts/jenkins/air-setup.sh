@@ -112,7 +112,15 @@ EOF
 plutil -lint "$tmp" >/dev/null
 sudo install -o root -g wheel -m 644 "$tmp" "$PLIST"
 rm -f "$tmp"
-sudo launchctl bootout "system/$LABEL" 2>/dev/null || true
+# Reload the service. bootout returns before a running Jenkins has stopped, and bootstrap fails
+# ("5: Input/output error") while the old one is still loaded, so wait for it to go.
+if sudo launchctl print "system/$LABEL" >/dev/null 2>&1; then
+  sudo launchctl bootout "system/$LABEL" 2>/dev/null || true
+  for _ in $(seq 1 60); do
+    sudo launchctl print "system/$LABEL" >/dev/null 2>&1 || break
+    sleep 1
+  done
+fi
 sudo launchctl bootstrap system "$PLIST"
 echo "  LaunchDaemon $LABEL runs Jenkins as $JUSER; it does not start at boot"
 
