@@ -7,6 +7,7 @@
 #      Pull request approvals stay at zero.
 #   3. Auto-merge is allowed, so bot pull requests (dev tags, promotions) merge once those
 #      checks pass; prod-gate still waits for the environment approval on any prod change.
+#      Merged branches are deleted automatically, so the next bot pull request can reuse a name.
 # Usage: scripts/protect-prod.sh [github-owner]
 set -euo pipefail
 OWNER="${1:-$(gh api user --jq .login)}"
@@ -37,5 +38,7 @@ print(json.dumps({k: r[k] for k in ("name", "target", "enforcement", "conditions
 ' | gh api -X PUT "repos/$REPO/rulesets/$RULESET_ID" --input - >/dev/null
 echo "  protect-main: requires pre-commit, secret-scan, policy, prod-gate"
 
-gh api -X PATCH "repos/$REPO" -F allow_auto_merge=true >/dev/null
-echo "  auto-merge allowed"
+# delete_branch_on_merge: a bot branch left behind after auto-merge blocks the next push of the
+# same name (a second promotion of the same tag failed this way on 2026-11-05).
+gh api -X PATCH "repos/$REPO" -F allow_auto_merge=true -F delete_branch_on_merge=true >/dev/null
+echo "  auto-merge allowed, merged branches deleted automatically"
