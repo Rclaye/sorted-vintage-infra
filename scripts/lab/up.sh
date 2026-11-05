@@ -12,11 +12,13 @@ if pgrep -i -x ollama >/dev/null 2>&1 || pgrep -i -f 'Ollama.app' >/dev/null 2>&
 fi
 docker inspect "$NODE" >/dev/null 2>&1 || die "no Kind node '$NODE'. Build the lab with 'make rebuild'."
 
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if node_running; then
   log "node $NODE is already running"
 else
   log "starting node $NODE"
   docker start "$NODE" >/dev/null
+  started=1
 fi
 
 log "waiting for the Kubernetes API"
@@ -26,6 +28,6 @@ until k get --raw /readyz >/dev/null 2>&1; do
   sleep 5
 done
 
-log "waiting for Argo CD apps (up to 10 minutes)"
-wait_apps_healthy 600
+log "waiting for Argo CD apps to be reconciled and Synced/Healthy (up to 10 minutes)"
+if [ "${started:-0}" = "1" ]; then wait_apps_healthy 600 "$since"; else wait_apps_healthy 600; fi
 log "lab is up"

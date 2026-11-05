@@ -76,5 +76,8 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   exit 0
 fi
 log "archives still current; stopping node $NODE"
-docker stop "$NODE" >/dev/null
+# Kind's node stops on SIGRTMIN+3 (systemd shutdown), which stops every pod in turn; docker's
+# default 10s before SIGKILL cut that short (exit 137 in the first test). A clean stop took
+# about 115s in the second test, so allow 180s.
+docker stop --time 180 "$NODE" >/dev/null
 log "lab is down"

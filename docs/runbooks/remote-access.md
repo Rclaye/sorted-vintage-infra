@@ -33,7 +33,7 @@ Editors: VS Code's Remote-SSH extension connects to `mac-mini-lab` and works on 
 
 ## Sessions
 
-The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. One-command start and stop arrive in Sprint 1: `make up` and `make down`, which checks that the database backups are current before stopping.
+The lab runs only while I am working. The mini is kept awake with Amphetamine during a session and can be off otherwise. Start and end a session with `make up` and `make down` on the mini as `bot`; `make down` checks that the database archives are current before stopping. The full routine, including the one-time setup on the Air, is in [lab-session.md](./lab-session.md).
 
 ## Sharing the mini with LocalMind
 

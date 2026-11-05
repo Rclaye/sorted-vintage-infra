@@ -22,14 +22,17 @@ node_running() {
   [ "$(docker inspect -f '{{.State.Running}}' "$NODE" 2>/dev/null)" = "true" ]
 }
 
-# Wait until every Argo CD Application is Synced and Healthy (timeout in seconds).
+# Wait until every Argo CD Application is Synced and Healthy (timeout in seconds). With a second
+# argument (UTC, 2026-11-05T01:43:58Z), an app also counts only once Argo CD has reconciled it
+# after that time: right after a node restart the statuses are the saved ones from before the
+# stop, and they read Synced/Healthy before anything has been checked.
 wait_apps_healthy() {
-  timeout="$1"; start=$(date +%s)
+  timeout="$1"; since="${2:-}"; start=$(date +%s)
   while :; do
     out=$(k -n argocd get applications.argoproj.io \
-      -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}' 2>/dev/null) || out=""
+      -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status} {.status.reconciledAt}{"\n"}{end}' 2>/dev/null) || out=""
     total=$(printf '%s\n' "$out" | grep -c . || true)
-    bad=$(printf '%s\n' "$out" | grep . | grep -v ' Synced Healthy$' || true)
+    bad=$(printf '%s\n' "$out" | grep . | awk -v s="$since" '$2 != "Synced" || $3 != "Healthy" || (s != "" && $4 < s) {print $1, $2, $3, ($4 < s ? "not reconciled since start" : "")}' || true)
     if [ "$total" -gt 0 ] && [ -z "$bad" ]; then
       log "all $total Argo CD apps Synced/Healthy after $(( $(date +%s) - start ))s"
       return 0
