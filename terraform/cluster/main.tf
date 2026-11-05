@@ -4,6 +4,11 @@
 terraform {
   required_version = ">= 1.11, < 2.0" # applied with 1.17 on the mini and in CI; the Air only validates
 
+  # State lives outside any clone, in bot's private ~/sv-terraform (mode 700), so make rebuild and
+  # the Jenkins pipeline share it. The path is given at init:
+  #   terraform init -backend-config=path=$HOME/sv-terraform/cluster.tfstate
+  backend "local" {}
+
   required_providers {
     kind = {
       source  = "tehcyx/kind"

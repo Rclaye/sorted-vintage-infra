@@ -1,0 +1,88 @@
+// infra-terraform (T014, ADR-0002, constitution Principle III): runs on the mini as bot (label lab).
+// fmt, validate, tfsec, plan; if anything would change, wait for a person to approve, then apply.
+// DESTROY=true plans a destroy and needs two approvals. State and secrets.auto.tfvars are in
+// bot's private ~/sv-terraform, shared with make rebuild.
+pipeline {
+  agent { label 'lab' }
+  options {
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    timeout(time: 2, unit: 'HOURS')
+  }
+  parameters {
+    booleanParam(name: 'DESTROY', defaultValue: false,
+      description: 'Plan and apply terraform destroy for bootstrap, then cluster. Needs two approvals. Garage data in ~/sv-data is kept.')
+  }
+  environment {
+    PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    TF_IN_AUTOMATION = '1'
+    TF_INPUT = '0'
+  }
+  stages {
+    stage('fmt') {
+      steps { sh 'terraform fmt -check -recursive -diff terraform' }
+    }
+    stage('init') {
+      steps { sh 'make tf-init' }
+    }
+    stage('validate') {
+      steps {
+        sh 'terraform -chdir=terraform/cluster validate -no-color'
+        sh 'terraform -chdir=terraform/bootstrap validate -no-color'
+      }
+    }
+    stage('tfsec') {
+      steps { sh 'tfsec terraform --no-color --concise-output' }
+    }
+    stage('plan') {
+      steps {
+        script {
+          def destroy = params.DESTROY ? '-destroy' : ''
+          def boot = '-var cluster_state_path=$HOME/sv-terraform/cluster.tfstate -var-file=$HOME/sv-terraform/secrets.auto.tfvars'
+          // -detailed-exitcode: 0 no changes, 1 error, 2 changes.
+          def b = sh(returnStatus: true, script: "terraform -chdir=terraform/bootstrap plan -no-color -detailed-exitcode ${destroy} ${boot} -out=bootstrap.tfplan")
+          def c = sh(returnStatus: true, script: "terraform -chdir=terraform/cluster plan -no-color -detailed-exitcode ${destroy} -out=cluster.tfplan")
+          if (b == 1 || c == 1) { error('terraform plan failed') }
+          env.CHANGES = (b == 2 || c == 2) ? 'true' : 'false'
+          echo(env.CHANGES == 'true' ? 'Plans have changes; waiting for approval.' : 'No changes. Nothing to apply.')
+        }
+      }
+    }
+    stage('approve') {
+      when { environment name: 'CHANGES', value: 'true' }
+      steps {
+        timeout(time: 1, unit: 'HOURS') {
+          input(message: params.DESTROY ? 'Destroy the lab cluster? Review both plans above.' : 'Apply these plans to the lab?',
+                ok: params.DESTROY ? 'Destroy (1 of 2)' : 'Apply')
+        }
+      }
+    }
+    stage('approve destroy again') {
+      when { allOf { environment name: 'CHANGES', value: 'true'; expression { params.DESTROY } } }
+      steps {
+        timeout(time: 30, unit: 'MINUTES') {
+          input(message: 'Second approval: this deletes the Kind cluster and everything in it except ~/sv-data.',
+                ok: 'Destroy (2 of 2)')
+        }
+      }
+    }
+    stage('apply') {
+      when { environment name: 'CHANGES', value: 'true' }
+      steps {
+        script {
+          if (params.DESTROY) {
+            sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
+            sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
+          } else {
+            sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
+            sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
+            sh 'scripts/lab/rebuild-wait.sh'
+          }
+        }
+      }
+    }
+  }
+  post {
+    always { sh 'rm -f terraform/*/*.tfplan' }   // plans can hold secret values
+  }
+}

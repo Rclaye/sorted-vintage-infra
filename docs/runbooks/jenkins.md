@@ -36,7 +36,7 @@ The Air's `ricomillz` must be a **standard** account, used for nothing else: no 
 scripts/jenkins/air-setup.sh
 ```
 
-It asks for your password. It installs `jenkins-lts` with Homebrew and stops the Homebrew service. It writes the LaunchDaemon `/Library/LaunchDaemons/com.sortedvintage.jenkins.plist`, which runs Jenkins as the Air's `ricomillz`, bound to loopback, and does not start at boot. It copies `jenkins/casc.yaml` to `/Users/ricomillz/.jenkins/`, and creates the agent key `/Users/ricomillz/.ssh/sv_jenkins_agent`, readable only by that account. It gives that account the mini's host key from your own verified `known_hosts`, and prints the command for step 2.
+It asks for your password. It installs `jenkins-lts` with Homebrew and stops the Homebrew service. It installs the plugins in `jenkins/plugins.txt` with the Jenkins Plugin Installation Manager (pinned, checksum-checked), copies `jenkins/casc.yaml` to `/Users/ricomillz/.jenkins/`, and creates a random admin password in `/Users/ricomillz/.jenkins/sv-admin-password`. It writes the LaunchDaemon `/Library/LaunchDaemons/com.sortedvintage.jenkins.plist`, which runs Jenkins as the Air's `ricomillz`, bound to loopback, with the setup wizard off, and does not start at boot. It creates the agent key `/Users/ricomillz/.ssh/sv_jenkins_agent`, readable only by that account, gives that account the mini's host key from your own verified `known_hosts`, and prints the command for step 2. It is safe to run again, for example after changing `plugins.txt` or `casc.yaml`.
 
 **2. Authorize the key on the mini.** Still on the Air, paste the command step 1 printed. It logs in to the mini as `bot` (`ssh mac-mini-lab`) and runs `scripts/jenkins/authorize-agent-key.sh` from `bot`'s clone of this repository:
 
@@ -46,13 +46,17 @@ ssh mac-mini-lab "~/Sorted-Vintage/src/sorted-vintage-infra/scripts/jenkins/auth
 
 The mini needs Java for the agent: `openjdk@21` is in the [Brewfile](../../scripts/Brewfile), installed by the mini's admin account. `/usr/bin/java` on a Mac is only a stub, so the agent uses `/opt/homebrew/opt/openjdk@21/bin/java`.
 
-**3. Start Jenkins and finish the first-run wizard** at `http://localhost:8080`. The unlock password is in a file only the Air's `ricomillz` can read. This copies it to your clipboard without printing it:
+**3. Start Jenkins and sign in** at `http://localhost:8080` as `admin`. There is no setup wizard: `jenkins/casc.yaml` (T103) defines the admin user, the `mac-mini` agent and the single `infra-terraform` job, which builds `main` only. The password is in a file only the Air's `ricomillz` can read; this copies it to your clipboard without printing it:
 
 ```bash
-sudo cat /Users/ricomillz/.jenkins/secrets/initialAdminPassword | pbcopy
+sudo cat /Users/ricomillz/.jenkins/sv-admin-password | pbcopy
 ```
 
-Configuration as code (T103) defines the agent and the single `infra-terraform` job, which builds `main` only. The agent's credential `mini-agent-ssh` is read from the key file, so no key is pasted into the UI or committed.
+The agent's credential `mini-agent-ssh` is read from the key file, so no key is pasted into the UI or committed. Settings changed in the UI are lost at the next start; change `casc.yaml` and rerun step 1 instead.
+
+## The pipeline
+
+`infra-terraform` ([jenkins/Jenkinsfile](../../jenkins/Jenkinsfile), T014) runs on the mini as `bot`: `fmt`, `init`, `validate`, `tfsec`, `plan`. If either plan has changes it waits for you to click **Apply** (up to an hour), then applies the cluster and bootstrap plans and waits for every Argo CD app to be healthy. With the `DESTROY` parameter it plans a destroy and needs two approvals. It reads and writes the same state as `make rebuild`: `~/sv-terraform` on the mini (mode 700), with `secrets.auto.tfvars` beside it.
 
 ## Daily use
 

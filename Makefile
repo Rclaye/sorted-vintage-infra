@@ -10,7 +10,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 TF := terraform
 
-.PHONY: help up down backups-check rebuild destroy status
+.PHONY: help up down backups-check tf-init rebuild destroy status
 
 help:
 	@sed -n '2,8s/^# //p' Makefile
@@ -24,18 +24,30 @@ down:
 backups-check:
 	@DRY_RUN=1 scripts/lab/down.sh
 
+# Terraform state and secrets.auto.tfvars live in bot's private folder, outside any clone, so
+# make rebuild and the Jenkins pipeline use the same ones.
+SV_TF_DIR ?= $(HOME)/sv-terraform
+TF_CLUSTER := -chdir=terraform/cluster
+TF_BOOT := -chdir=terraform/bootstrap
+BOOT_VARS := -var cluster_state_path=$(SV_TF_DIR)/cluster.tfstate -var-file=$(SV_TF_DIR)/secrets.auto.tfvars
+
+tf-init:
+	@test -f $(SV_TF_DIR)/secrets.auto.tfvars || { echo "missing $(SV_TF_DIR)/secrets.auto.tfvars (scripts/secrets/new-secrets-tfvars.sh)"; exit 1; }
+	$(TF) $(TF_CLUSTER) init -input=false -backend-config=path=$(SV_TF_DIR)/cluster.tfstate
+	$(TF) $(TF_BOOT) init -input=false -backend-config=path=$(SV_TF_DIR)/bootstrap.tfstate
+
 rebuild:
 	@. scripts/lab/common.sh && require_lab_user && require_docker
-	$(TF) -chdir=terraform/cluster init -input=false
-	$(TF) -chdir=terraform/cluster apply
-	$(TF) -chdir=terraform/bootstrap init -input=false
-	$(TF) -chdir=terraform/bootstrap apply
+	@$(MAKE) --no-print-directory tf-init
+	$(TF) $(TF_CLUSTER) apply
+	$(TF) $(TF_BOOT) apply $(BOOT_VARS)
 	@scripts/lab/rebuild-wait.sh
 
 destroy:
 	@. scripts/lab/common.sh && require_lab_user && require_docker
-	$(TF) -chdir=terraform/bootstrap destroy
-	$(TF) -chdir=terraform/cluster destroy
+	@$(MAKE) --no-print-directory tf-init
+	$(TF) $(TF_BOOT) destroy $(BOOT_VARS)
+	$(TF) $(TF_CLUSTER) destroy
 	@echo "Garage data in ~/sv-data is kept (photos and backups survive a rebuild)."
 
 status:

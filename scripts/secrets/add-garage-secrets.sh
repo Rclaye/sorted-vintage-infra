@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Adds Garage's secrets to terraform/bootstrap/secrets.auto.tfvars on the Mac mini, as bot (research R19).
+# Adds Garage's secrets to ~/sv-terraform/secrets.auto.tfvars on the Mac mini, as bot (research R19).
 # Per environment it generates the RPC secret, the admin token and two S3 keys (photos, backups) in the
 # formats Garage expects. Asks for nothing, prints no values, and does nothing if a garage block exists.
 # From the Air (quoted, so ~ is bot's home on the mini, not yours on the Air):
@@ -8,7 +8,8 @@ set -euo pipefail
 umask 077
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OUT="$ROOT/terraform/bootstrap/secrets.auto.tfvars"
+OUT="${SV_TF_DIR:-$HOME/sv-terraform}/secrets.auto.tfvars"
+mkdir -p "$(dirname "$OUT")" && chmod 700 "$(dirname "$OUT")"
 
 [[ "$(id -un)" == "${SV_LAB_USER:-bot}" ]] || { echo "Run this as ${SV_LAB_USER:-bot} on the mini, not as $(id -un)."; exit 1; }
 [[ -f "$OUT" ]] || { echo "$OUT does not exist; run scripts/secrets/new-secrets-tfvars.sh first."; exit 1; }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Writes terraform/bootstrap/secrets.auto.tfvars (git-ignored, mode 600) on the Mac mini, as bot.
+# Writes ~/sv-terraform/secrets.auto.tfvars (git-ignored, mode 600) on the Mac mini, as bot.
 # Asks for each environment's Stripe test keys without echoing them, and generates everything else:
 #   - the webhook signing secret of each sandbox (stripe listen --print-secret, projects sv-dev and sv-prod)
 #   - one database password per environment and database
@@ -13,7 +13,8 @@ set -euo pipefail
 umask 077
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OUT="$ROOT/terraform/bootstrap/secrets.auto.tfvars"
+OUT="${SV_TF_DIR:-$HOME/sv-terraform}/secrets.auto.tfvars"
+mkdir -p "$(dirname "$OUT")" && chmod 700 "$(dirname "$OUT")"
 
 [[ "$(id -un)" == "${SV_LAB_USER:-bot}" ]] || { echo "Run this as ${SV_LAB_USER:-bot} on the mini, not as $(id -un)."; exit 1; }
 [[ ! -e "$OUT" ]] || { echo "$OUT already exists; move it aside first if you mean to replace it."; exit 1; }

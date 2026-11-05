@@ -1,0 +1,86 @@
+# Jenkins controller as code (T103, research R15). Copied to /Users/ricomillz/.jenkins/casc.yaml by
+# scripts/jenkins/air-setup.sh; Jenkins reads it at start (CASC_JENKINS_CONFIG). No secret values
+# here: the admin password and the agent key are read from files only the Air's ricomillz can read.
+jenkins:
+  systemMessage: "Sorted Vintage lab: one job, infra-terraform. Configured by jenkins/casc.yaml in sorted-vintage-infra; changes made in the UI are lost at restart."
+  numExecutors: 0                      # the controller runs no builds
+  mode: EXCLUSIVE
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          name: Lab admin
+          password: "${readFile:${SV_ADMIN_PASSWORD_FILE}}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: true
+  nodes:
+    - permanent:
+        name: mac-mini
+        labelString: lab
+        numExecutors: 1
+        mode: EXCLUSIVE
+        remoteFS: /Users/bot/jenkins-agent
+        launcher:
+          ssh:
+            host: ricomillzs-Mac-mini.local
+            port: 22
+            credentialsId: mini-agent-ssh
+            javaPath: /opt/homebrew/opt/openjdk@21/bin/java
+            sshHostKeyVerificationStrategy:
+              knownHostsFileKeyVerificationStrategy: {}   # the mini's key, copied from your verified known_hosts
+        retentionStrategy: always
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - basicSSHUserPrivateKey:
+              scope: SYSTEM
+              id: mini-agent-ssh
+              username: bot
+              description: Agent key for bot on the Mac mini (restricted in its authorized_keys)
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:${SV_AGENT_KEY_FILE}}"
+
+unclassified:
+  location:
+    url: http://localhost:8080/
+
+# The single job: main of the public infra repo, polled (GitHub cannot reach Jenkins). No
+# multibranch and no pull request or fork discovery, so a stranger's Jenkinsfile never runs.
+jobs:
+  - script: |
+      pipelineJob('infra-terraform') {
+        description('fmt, validate, tfsec, plan, approval, apply for sorted-vintage-infra (T014). Destroy needs a second approval.')
+        properties {
+          disableConcurrentBuilds()
+          pipelineTriggers {
+            triggers {
+              pollSCM {
+                scmpoll_spec('H/5 * * * *')
+              }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/Rclaye/sorted-vintage-infra.git')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('jenkins/Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }

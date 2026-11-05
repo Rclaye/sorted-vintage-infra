@@ -12,9 +12,15 @@ JUSER="${SV_JENKINS_USER:-ricomillz}"
 MINI_HOST="${SV_MINI_HOST:-ricomillzs-Mac-mini.local}"
 LABEL=com.sortedvintage.jenkins
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
-CASC="$(cd "$(dirname "$0")/../.." && pwd)/jenkins/casc.yaml"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+CASC="$REPO/jenkins/casc.yaml"
+PLUGINS="$REPO/jenkins/plugins.txt"
+# Jenkins Plugin Installation Manager, pinned and checksum-checked (T103).
+PIM_VERSION=2.15.0
+PIM_SHA256=a86853ec2e2933f37a4b471ba65099b61e03c87a80c2ef8fe2315eb135672d43
 
 command -v brew >/dev/null || { echo "Homebrew is required"; exit 1; }
+[[ -f "$CASC" && -f "$PLUGINS" ]] || { echo "Run this from a clone that has jenkins/casc.yaml and jenkins/plugins.txt."; exit 1; }
 [[ "$(id -un)" != "$JUSER" ]] || { echo "Run this from your everyday account, not as $JUSER."; exit 1; }
 id "$JUSER" >/dev/null 2>&1 || { echo "No account '$JUSER' on this Mac. Create a standard account first (System Settings > Users & Groups)."; exit 1; }
 if dsmemberutil checkmembership -U "$JUSER" -G admin | grep -q 'is a member'; then
@@ -39,10 +45,30 @@ brew list --formula jenkins-lts >/dev/null 2>&1 || brew install jenkins-lts
 brew services stop jenkins-lts >/dev/null 2>&1 || true
 as_j mkdir -p "$JHOME/.jenkins" "$JHOME/.ssh" "$LOGS"
 as_j chmod 700 "$JHOME/.jenkins" "$JHOME/.ssh"
-if [[ -f "$CASC" ]]; then
-  sudo install -o "$JUSER" -g staff -m 600 "$CASC" "$JHOME/.jenkins/casc.yaml"
-  echo "  copied jenkins/casc.yaml to $JHOME/.jenkins/"
+sudo install -o "$JUSER" -g staff -m 600 "$CASC" "$JHOME/.jenkins/casc.yaml"
+echo "  copied jenkins/casc.yaml to $JHOME/.jenkins/"
+
+JAVA="$(brew --prefix openjdk@21)/bin/java"
+WAR="$(brew --prefix)/opt/jenkins-lts/libexec/jenkins.war"
+[[ -x "$JAVA" && -f "$WAR" ]] || { echo "Missing $JAVA or $WAR after installing jenkins-lts."; exit 1; }
+
+# The admin password: random, in a file only $JUSER can read; casc.yaml reads it at start.
+ADMIN_PW="$JHOME/.jenkins/sv-admin-password"
+if ! sudo test -s "$ADMIN_PW"; then
+  as_j /bin/sh -c "umask 077; LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 > '$ADMIN_PW'"
+  echo "  created the admin password file (readable by $JUSER only)"
 fi
+
+echo "Plugins"
+tmpd="$(mktemp -d)"
+curl -fsSL -o "$tmpd/pim.jar" "https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/$PIM_VERSION/jenkins-plugin-manager-$PIM_VERSION.jar"
+echo "$PIM_SHA256  $tmpd/pim.jar" | shasum -a 256 -c - >/dev/null || { echo "Plugin manager checksum mismatch; stopping."; rm -rf "$tmpd"; exit 1; }
+sudo install -o "$JUSER" -g staff -m 644 "$tmpd/pim.jar" "$JHOME/.jenkins/jenkins-plugin-manager.jar"
+sudo install -o "$JUSER" -g staff -m 644 "$PLUGINS" "$JHOME/.jenkins/plugins.txt"
+rm -rf "$tmpd"
+as_j "$JAVA" -jar "$JHOME/.jenkins/jenkins-plugin-manager.jar" --war "$WAR" \
+  --plugin-download-directory "$JHOME/.jenkins/plugins" --plugin-file "$JHOME/.jenkins/plugins.txt" >/dev/null
+echo "  installed the plugins in jenkins/plugins.txt and their dependencies"
 
 tmp="$(mktemp)"
 cat >"$tmp" <<EOF
@@ -56,7 +82,10 @@ cat >"$tmp" <<EOF
   <key>Umask</key><integer>63</integer>
   <key>ProgramArguments</key>
   <array>
-    <string>$(brew --prefix)/opt/jenkins-lts/bin/jenkins-lts</string>
+    <string>$JAVA</string>
+    <string>-Djenkins.install.runSetupWizard=false</string>
+    <string>-jar</string>
+    <string>$WAR</string>
     <string>--httpListenAddress=127.0.0.1</string>
     <string>--httpPort=8080</string>
   </array>
@@ -66,6 +95,7 @@ cat >"$tmp" <<EOF
     <key>JENKINS_HOME</key><string>$JHOME/.jenkins</string>
     <key>CASC_JENKINS_CONFIG</key><string>$JHOME/.jenkins/casc.yaml</string>
     <key>SV_AGENT_KEY_FILE</key><string>$KEY</string>
+    <key>SV_ADMIN_PASSWORD_FILE</key><string>$ADMIN_PW</string>
   </dict>
   <key>RunAtLoad</key><false/>
   <key>KeepAlive</key><false/>
@@ -97,7 +127,8 @@ fi
 echo
 echo "Done. Jenkins does not start at boot; start it at the beginning of a lab session with:"
 echo "  sudo launchctl kickstart system/$LABEL"
-echo "and open http://localhost:8080."
+echo "and open http://localhost:8080. Sign in as admin; this copies the password to your clipboard:"
+echo "  sudo cat $ADMIN_PW | pbcopy"
 echo
 echo "Next, from this account, authorize the agent key on the mini as bot (prints nothing secret):"
 echo "  ssh mac-mini-lab \"~/Sorted-Vintage/src/sorted-vintage-infra/scripts/jenkins/authorize-agent-key.sh '$(sudo cat "$KEY.pub")'\""

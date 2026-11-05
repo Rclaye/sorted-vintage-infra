@@ -103,7 +103,7 @@ Then close the tunnel (Ctrl-C) and, if you like, start Ollama again.
 | Command | Does |
 | --- | --- |
 | `make status` | the node's state and every Argo CD app |
-| `make rebuild` | `terraform apply` for `cluster`, then `bootstrap`, then waits (up to 20 minutes) for every app; Terraform asks before each apply |
+| `make rebuild` | `terraform apply` for `cluster`, then `bootstrap`, then waits (up to 20 minutes) for every app; Terraform asks before each apply. State and `secrets.auto.tfvars` are in `~/sv-terraform` (mode 700), shared with the Jenkins pipeline |
 | `make destroy` | `terraform destroy` for `bootstrap`, then `cluster`; Garage data in `~/sv-data` is kept |
 
 ## Jenkins (from Ticket 1.7)
