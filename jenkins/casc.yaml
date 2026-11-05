@@ -15,9 +15,7 @@ jenkins:
   authorizationStrategy:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
-  crumbIssuer:
-    standard:
-      excludeClientIPFromCrumb: false
+  # CSRF protection (crumbs) is on by default in this Jenkins; no setting needed.
   disableRememberMe: true
   nodes:
     - permanent:
