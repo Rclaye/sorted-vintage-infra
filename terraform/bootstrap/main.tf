@@ -1,8 +1,13 @@
 # Root 2 of 2: Argo CD, the root Application and the bootstrap Secrets. Applied after terraform/cluster.
-# Run on the Mac mini as bot. Needs secrets.auto.tfvars (scripts/secrets/new-secrets-tfvars.sh).
+# Run on the Mac mini as bot. Needs ~/sv-terraform/secrets.auto.tfvars (scripts/secrets/new-secrets-tfvars.sh),
+# passed with -var-file; make rebuild and the Jenkinsfile do that.
 
 terraform {
   required_version = ">= 1.11, < 2.0" # applied with 1.17 on the mini and in CI; the Air only validates
+
+  # State in bot's private ~/sv-terraform, like the cluster root:
+  #   terraform init -backend-config=path=$HOME/sv-terraform/bootstrap.tfstate
+  backend "local" {}
 
   required_providers {
     helm = {
@@ -25,7 +30,7 @@ data "terraform_remote_state" "cluster" {
   backend = "local"
 
   config = {
-    path = "${path.module}/../cluster/terraform.tfstate"
+    path = var.cluster_state_path
   }
 }
 
@@ -64,6 +69,11 @@ module "secrets" {
   keycloak        = var.keycloak
   tls_certificate = var.tls_certificate
   tls_private_key = var.tls_private_key
+}
+
+variable "cluster_state_path" {
+  description = "Path of the cluster root's state, e.g. /Users/bot/sv-terraform/cluster.tfstate."
+  type        = string
 }
 
 variable "environments" {

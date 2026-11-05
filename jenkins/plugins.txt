@@ -1,0 +1,11 @@
+# Jenkins plugins (T103), installed by scripts/jenkins/air-setup.sh with the Jenkins Plugin
+# Installation Manager. Keep this list short: every plugin runs with the controller's rights.
+# Versions resolve to the latest release compatible with the installed jenkins-lts; rerun
+# air-setup.sh to update them.
+configuration-as-code
+job-dsl
+workflow-aggregator
+git
+ssh-slaves
+credentials-binding
+pipeline-stage-view

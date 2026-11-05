@@ -194,3 +194,13 @@ Run on 2026-11-03 on a throwaway Kind cluster `sv-spike` (same `kindest/node:v1.
 - `kyverno apply policies/ --cluster` against the live lab (read-only) found the sv-* data stores without CPU limits and Garage/Mailpit without a label tying them to their upstream image; gitops PR "CPU limits and part-of labels" fixes both before enforcement starts. It also showed that the PV rule must match `CREATE` only, or the PV controller's own updates to provisioned PVs would be refused.
 - `scripts/policy-check.sh` fails when a service overlay holds a non-`ghcr.io/rclaye/` image, and when an overlay does not set `namespace: sv-<env>` (Ticket 1.4 acceptance 2, run locally; CI run pending).
 - Not measured: Kyverno's memory (crictl output changed); measure in the lab after deploy for T032.
+
+## T104, T103: Jenkins on the Air and Terraform state (Ticket 1.7)
+
+Run on 2026-11-05.
+
+- Terraform state moved out of `bot`'s clone into `~/sv-terraform` on the mini (folder 700, files 600, with `secrets.auto.tfvars`), so `make rebuild` and Jenkins share it. Spiked on a private scratch copy first; after `terraform init -migrate-state` both roots planned with no changes against the live cluster. The Kind module's `kubeconfig_path` was left alone: changing it forces the cluster to be replaced.
+- `air-setup.sh` on the Air: Jenkins 2.580.2 (Homebrew `jenkins-lts`) runs as the Air's standard account `ricomillz`, listening on `127.0.0.1:8080` only; anonymous requests get 403. Plugins from `jenkins/plugins.txt` (69 with dependencies) installed by the Plugin Installation Manager 2.15.0, pinned and checksum-checked. The setup wizard is off; `casc.yaml` defines the admin user (password generated into a file only `ricomillz` reads), the agent and the job.
+- Found while running it: commands run as `ricomillz` must start from `/` (the everyday home is 700, so `getcwd` failed and the plugin step stopped); `launchctl bootstrap` fails with "5: Input/output error" until the old service has fully unloaded; Jenkins 2.580 no longer accepts `crumbIssuer.standard.excludeClientIPFromCrumb` (CSRF protection is on by default). All three fixed in the scripts.
+- The agent key is in `bot`'s `authorized_keys` with `restrict`; the `mac-mini` agent connects (`remoting.jar` as `bot` with `/opt/homebrew/opt/openjdk@21/bin/java`).
+- `tfsec` reports no problems on `terraform/`. tfsec is being folded into Trivy; switching to `trivy config` is a later improvement.
