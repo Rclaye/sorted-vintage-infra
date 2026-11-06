@@ -14,9 +14,9 @@
 - Paths are prefixed by repository: `infra/`, `app/`, `gitops/`. Paths under `specs/` are in `infra/`.
 - Field rules quoted in a task come from [data-model.md](./data-model.md); API shapes come from the named contract file.
 
-**Task IDs**: T103–T107 were added after generation and placed where they run. They are numbered after T102 so that existing references stay valid.
+**Task IDs**: T103–T107 were added after generation and placed where they run. They are numbered after T102 so that existing references stay valid. T108–T114 come from convergence (Phase 11); T115–T119 were added when Sprint 2 was planned (2026-11-05) and sit at the end of Phase 3.
 
-**Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 and Phase 4 up to T079 = Sprint 2 · the rest of Phase 4 through Phase 9 = Sprint 3 · Phase 10 = Gate 1 release
+**Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 (US1) and T113, T115–T119 = Sprint 2 · Phase 4 (US2) through Phase 9 = Sprint 3 · Phase 10 = Gate 1 release. Re-scoped 2026-11-05: Sprint 2 is User Story 1 only, so a whole story is finished and verified before the next starts; US2 moves to Sprint 3 with the purchase checks of T075 ([sprint2.md](../../sprints/sprint-2/sprint2.md)).
 
 ---
 
@@ -117,11 +117,19 @@
 - [ ] T051 [US1] Seed job in `app/tools/seed/` and `gitops/services/seed/` as an Argo CD PostSync hook: demo sellers in Keycloak with onboarded test connected accounts, 50 listings with photos, idempotent on re-run (US3 scenario 2)
 - [ ] T052 [US1] Spike R6: confirm the browser redirect back to `https://dev.sortedvtg.lan/sell/onboarding` works after test onboarding (Stripe already accepts the URL when creating the link, T009); if not, switch the T043 URLs to `https://localhost:8443/sell/onboarding`; record the result in `infra/sprints/sprint-2/spikes.md`
 
+### Added when Sprint 2 was planned (2026-11-05)
+
+- [ ] T115 [US1] Write `infra/sprints/sprint-2/verify_sprint2.sh` (Air mode and `MINI=local`): run `verify_sprint1.sh` first; then Listings and Payments `/healthz` in both namespaces, the BFF through its Ingress with the mkcert CA, the Stripe forwarder ready, a bad `Stripe-Signature` refused with 400 on both webhooks, seeded listings searchable, and in dev only a scripted draft, two photos and publish for a pre-onboarded seller that appears in search within 5 seconds (T113); a renamed `.txt` refused with 415 and an 11 MB image with 413. Prod is read-only
+- [ ] T116 [US1] Extend `app/.github/workflows/build.yml` so a service with `build.gradle.kts` builds with Gradle on `ubuntu-24.04-arm` (tests, then image), runs Trivy and the SonarQube Cloud scan like the Python services, and hands its tag to gitops through `sv-deployer`; create SonarQube Cloud projects `rclaye_sv-listings` and `rclaye_sv-payments` with their `sonar-project.properties` (T105)
+- [ ] T117 [US1] Add an Ingress for the BFF in `gitops/services/bff/overlays/{dev,prod}`: hosts `dev.sortedvtg.lan` and `prod.sortedvtg.lan` on Traefik with the default TLS certificate
+- [ ] T118 [US1] Make the Jenkins `verify` stage run the newest `infra/sprints/sprint-*` folder that contains its `verify_sprintN.sh`, so a sprint's folder can land before its script (T107)
+- [ ] T119 [US1] Re-measure memory as in T032 with Listings, Payments and the forwarder running, and write `infra/sprints/sprint-2/sprint2_retro.md`; add each Sprint 2 acceptance check to `infra/docs/verification-log.md`
+
 **Checkpoint**: User Story 1 works on its own ([quickstart step 2](./quickstart.md#2-seller-lists-an-item-user-story-1-sc-001)).
 
 ---
 
-## Phase 4: User Story 2 - Buyer purchases and the seller is notified (Priority: P1, Sprints 2–3) 🎯 MVP part 2
+## Phase 4: User Story 2 - Buyer purchases and the seller is notified (Priority: P1, Sprint 3) 🎯 MVP part 2
 
 **Goal**: a buyer pays at the asking price in Stripe test mode, the item is sold exactly once, the ledger balances, and both parties get email.
 
@@ -154,7 +162,7 @@
 - [ ] T072 [US2] Notifications consumer in `app/services/notifications/app/consumer.py` with `opentelemetry-instrumentation-aio-pika`: for `order.paid` send the buyer confirmation and the seller sale email, for `order.refunded` send the buyer a refund notice; look up addresses from Keycloak with a client-credentials token; SMTP to Mailpit; skip any `event_id` + `template` already `sent`; reject after the fifth failure so the message dead-letters and the row becomes `dead_lettered` (FR-015, FR-016, FR-017)
 - [ ] T073 [US2] BFF checkout in `app/services/bff/app/routes/checkout.py` and templates: `POST /checkout/{listing_id}` generates the `Idempotency-Key`, shows the Payment Element with the environment's publishable key, and handles `not_available` and `own_listing`; `GET /orders/{order_id}` polls with HTMX until the order is final; `GET /orders` lists the buyer's orders
 - [ ] T074 [P] [US2] GitOps manifests `gitops/services/orders/` and `gitops/services/notifications/` (`base`, `overlays/dev`, `overlays/prod`), with the platform fee percentage as a ConfigMap value defaulting to 10
-- [ ] T075 [US2] Write `infra/sprints/sprint-2/verify_sprint2.sh`: listing publishes and is searchable, a scripted purchase with `pm_card_visa` ends `paid` with a balanced ledger and two emails in Mailpit, `pm_card_chargeDeclined` releases the item, and T058 reports zero double sales
+- [ ] T075 [US2] Add to `infra/sprints/sprint-3/verify_sprint3.sh` (T100; moved from `verify_sprint2.sh` when Sprint 2 was scoped to US1, whose checks are T115): a scripted purchase with `pm_card_visa` ends `paid` with a balanced ledger and two emails in Mailpit, `pm_card_chargeDeclined` releases the item, and T058 reports zero double sales
 
 **Checkpoint**: User Stories 1 and 2 both work; this is the MVP ([quickstart steps 2 and 3](./quickstart.md#3-buyer-purchases-it-user-story-2)).
 
@@ -296,8 +304,8 @@ Then services in parallel against the contracts:
 
 1. Phase 1, including the T008 and T009 spikes.
 2. Phase 2. Stop and run `verify_sprint1.sh`.
-3. Phase 3 (US1). Stop and check quickstart step 2.
-4. Phase 4 (US2). Stop and run `verify_sprint2.sh`. This is the MVP: a working marketplace on a platform delivered from Git.
+3. Phase 3 (US1). Stop, run `verify_sprint2.sh` (T115) and check quickstart step 2 by hand.
+4. Phase 4 (US2). Stop and run the purchase checks of T075 in `verify_sprint3.sh`. This is the MVP: a working marketplace on a platform delivered from Git.
 
 ### Incremental delivery
 
@@ -314,5 +322,5 @@ Then services in parallel against the contracts:
 - [ ] T110 Fit the T076 restore mode to the current layout: `gitops/platform/postgres/` is organised as environment overlays (`overlays/dev`, `overlays/prod`), not `overlays/initdb` and `overlays/recovery`, so make the committed mode a per-environment choice (for example a `recovery` component each environment overlay includes) and set `bootstrap.recovery.database: listings` and `owner: listings` as the T022 spike found, per T076, FR-023 (partial)
 - [x] T111 Make drift visible: the root app and every platform Application auto-heal (`selfHeal: true`) but nothing records that drift happened; alert on Argo CD `OutOfSync` and self-heal events and keep a record that the SC-006 evidence can cite, per SC-006 (partial). In progress with T019: Argo CD exposes metrics (Terraform), a ServiceMonitor scrapes them, and PrometheusRules `ArgoCDAppOutOfSync` and `ArgoCDAppUnhealthy` fire after 10 minutes, with `argocd_app_info` kept 7 days; each self-heal shows as an automated "Partial sync" event on the Application (kept about an hour) and as an increase in `argocd_app_sync_total` (kept 7 days in Prometheus), not in the sync history, which lists only syncs to a new revision (drift check in spikes.md)
 - [x] T112 Set `automountServiceAccountToken: false` and a dedicated ServiceAccount on the Garage StatefulSet, the `garage-setup` Job and the Mailpit Deployment, which use the namespace default account although none calls the Kubernetes API, and make the same the T027 template default, per Constitution VI Done for Garage, its setup Job and Mailpit; the T027 template default too (own ServiceAccount, `automountServiceAccountToken: false`, app #2)
-- [ ] T113 Add a timed check that a published listing appears in browse within 5 seconds, to `verify_sprint2.sh` (T075) and `verify_sprint3.sh` (T100), per US1/AC3 (missing)
+- [ ] T113 Add a timed check that a published listing appears in browse within 5 seconds, to `verify_sprint2.sh` (T115) and `verify_sprint3.sh` (T100), per US1/AC3 (missing)
 - [ ] T114 Enable the Argo CD Notifications controller, which `infra/terraform/modules/argocd-bootstrap/main.tf` turns off (`notifications = { enabled = false }`), so the T086 `on-deployed` change events can run, per FR-021 (contradicts)

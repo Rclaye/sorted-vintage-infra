@@ -14,7 +14,7 @@ pipeline {
     booleanParam(name: 'DESTROY', defaultValue: false,
       description: 'Plan and apply terraform destroy for bootstrap, then cluster. Needs two approvals. Garage data in ~/sv-data is kept.')
     string(name: 'SPRINT', defaultValue: '',
-      description: 'Sprint whose sprints/sprint-N/verify_sprintN.sh the verify stage runs. Empty: the highest sprints/sprint-* folder.')
+      description: 'Sprint whose sprints/sprint-N/verify_sprintN.sh the verify stage runs. Empty: the highest sprint that has its verify script.')
   }
   environment {
     PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
@@ -94,8 +94,11 @@ pipeline {
           git(url: "https://github.com/${env.SV_OWNER}/sorted-vintage-gitops.git", branch: 'main', poll: false, changelog: false)
         }
         script {
+          // The newest sprint whose verify script exists (T118): a sprint's folder lands with its
+          // plan, and its script only at the end of the sprint, so the last sprint's checks keep
+          // guarding every build until then.
           def n = params.SPRINT?.trim() ?: sh(returnStdout: true,
-            script: "ls -d sprints/sprint-* | sed 's|.*/sprint-||' | sort -n | tail -1").trim()
+            script: "find sprints -path 'sprints/sprint-*/verify_sprint*.sh' | sed 's|^sprints/sprint-\\([0-9]*\\)/.*|\\1|' | sort -n | tail -1").trim()
           if (!(n ==~ /\d+/)) { error("SPRINT must be a number, got '${n}'") }
           withEnv(['MINI=local', "SV_GITOPS=${env.WORKSPACE}@gitops", "SPRINT_N=${n}"]) {
             sh 'bash "sprints/sprint-$SPRINT_N/verify_sprint$SPRINT_N.sh"'
