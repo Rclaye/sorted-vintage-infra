@@ -1,0 +1,2 @@
+Throwaway test for Ticket 0.2: a fake, randomly generated key ID that must fail secret-scan.
+aws_access_key_id = AKIALBUFMKC4RVC7KR4R
