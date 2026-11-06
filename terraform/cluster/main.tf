@@ -39,7 +39,8 @@ variable "lab_data_dir" {
   default     = "~/sv-data"
 }
 
-# Read by terraform/bootstrap through terraform_remote_state.
+# Read by terraform/bootstrap through terraform_remote_state. The certificates are public, but
+# sensitive keeps them out of apply logs (Jenkins console); bootstrap still reads them from state.
 output "name" {
   value = module.kind_cluster.name
 }
@@ -49,11 +50,13 @@ output "endpoint" {
 }
 
 output "cluster_ca_certificate" {
-  value = module.kind_cluster.cluster_ca_certificate
+  value     = module.kind_cluster.cluster_ca_certificate
+  sensitive = true
 }
 
 output "client_certificate" {
-  value = module.kind_cluster.client_certificate
+  value     = module.kind_cluster.client_certificate
+  sensitive = true
 }
 
 output "client_key" {
