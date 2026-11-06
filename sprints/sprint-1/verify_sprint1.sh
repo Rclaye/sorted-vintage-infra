@@ -1,32 +1,61 @@
 #!/usr/bin/env bash
-# Sprint 1 verification. Run on the MacBook Air with the lab up (make up on the mini).
-# Read-only: it changes nothing in the cluster (server-side dry runs only).
-#   SV_ROOT     folder holding the three clones on the Air (default: ~/Sorted-Vintage/src)
-#   SV_OWNER    GitHub owner (default: the logged-in gh user)
-#   MINI        ssh host for the Mac mini's lab account bot (default: mac-mini-lab)
-#   MINI_INFRA  sorted-vintage-infra clone on the mini (default: $HOME/Sorted-Vintage/src/sorted-vintage-infra on the mini)
+# Sprint 1 verification. Read-only: it changes nothing in the cluster (server-side dry runs only).
+# Two ways to run it, both with the lab up (make up on the mini):
+#   from the MacBook Air (default): mini commands go over SSH, and the Air's Jenkins is checked too;
+#   on the mini as bot with MINI=local: the Jenkins verify stage (T107); the Air checks are skipped.
+#   SV_ROOT     folder holding the clones (default: the folder this infra clone is in)
+#   SV_GITOPS   sorted-vintage-gitops clone (default: $SV_ROOT/sorted-vintage-gitops)
+#   SV_OWNER    GitHub owner (default: the logged-in gh user; required with MINI=local)
+#   MINI        ssh host for the Mac mini's lab account bot (default: mac-mini-lab), or local
+#   MINI_INFRA  infra clone on the mini, initialized with make tf-init (default with SSH:
+#               $HOME/Sorted-Vintage/src/sorted-vintage-infra on the mini; with MINI=local: this clone)
+#   SV_TF_DIR   Terraform state and secrets.auto.tfvars on the mini (default: $HOME/sv-terraform there)
 set -euo pipefail
 
-SV_ROOT="${SV_ROOT:-$HOME/Sorted-Vintage/src}"
+INFRA="$(cd "$(dirname "$0")/../.." && pwd)"
+SV_ROOT="${SV_ROOT:-$(dirname "$INFRA")}"
+G="${SV_GITOPS:-$SV_ROOT/sorted-vintage-gitops}"
 MINI="${MINI:-mac-mini-lab}"
-MINI_INFRA="${MINI_INFRA:-\$HOME/Sorted-Vintage/src/sorted-vintage-infra}"  # expanded on the mini
+if [[ "$MINI" == local ]]; then
+  LOCAL=1
+  MINI_INFRA="${MINI_INFRA:-$INFRA}"
+else
+  LOCAL=0
+  MINI_INFRA="${MINI_INFRA:-\$HOME/Sorted-Vintage/src/sorted-vintage-infra}"  # expanded on the mini
+fi
+SV_TF_DIR="${SV_TF_DIR:-\$HOME/sv-terraform}"  # expanded on the mini
 CLUSTER=sorted-vintage
 NODE="$CLUSTER-control-plane"
-G="$SV_ROOT/sorted-vintage-gitops"
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$*"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$*"; exit 1; }
 skip() { printf '  \033[33mSKIP\033[0m %s\n' "$*"; }
-remote() { ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" "export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH; $1"; }
+remote() {
+  if (( LOCAL )); then bash -c "export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH; $1"
+  else ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" "export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH; $1"; fi
+}
 k() { remote "kubectl --context kind-$CLUSTER $1"; }
+# GitHub reads: gh on the Air; anonymous curl on the agent, which holds no GitHub credentials
+# (the repositories are public).
+gh_read() {
+  if (( LOCAL )); then curl -fsS -H 'Accept: application/vnd.github+json' "https://api.github.com/$1" | jq -r "$2"
+  else gh api "$1" --jq "$2"; fi
+}
 
-echo "Workstation"
-for t in gh ssh curl lsof; do command -v "$t" >/dev/null 2>&1 && pass "tool: $t" || fail "tool missing: $t"; done
-SV_OWNER="${SV_OWNER:-$(gh api user --jq .login)}"
+if (( LOCAL )); then
+  echo "Agent on the mini (MINI=local)"
+  for t in curl jq git; do command -v "$t" >/dev/null 2>&1 && pass "tool: $t" || fail "tool missing: $t"; done
+  [[ -n "${SV_OWNER:-}" ]] || fail "set SV_OWNER with MINI=local"
+else
+  echo "Workstation"
+  for t in gh ssh curl jq lsof; do command -v "$t" >/dev/null 2>&1 && pass "tool: $t" || fail "tool missing: $t"; done
+  SV_OWNER="${SV_OWNER:-$(gh api user --jq .login)}"
+fi
 [[ -d "$G/.git" ]] || fail "no gitops clone at $G"
 
 echo "Mac mini toolchain (Ticket 1.1)"
-ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" true 2>/dev/null && pass "ssh $MINI" || fail "cannot ssh to $MINI"
+if (( LOCAL )); then skip "ssh to the mini (running on it)"
+else ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" true 2>/dev/null && pass "ssh $MINI" || fail "cannot ssh to $MINI"; fi
 remote "id -un" | grep -qx bot && pass "the lab runs as bot" || fail "$MINI does not log in as bot (ADR-0008)"
 remote "dsmemberutil checkmembership -U bot -G admin" | grep -q "is not a member" && pass "bot is a standard account" || fail "bot is an admin on the mini"
 remote "docker info >/dev/null 2>&1" && pass "Docker answers for bot" || fail "Docker is not running for bot; log in as bot at the mini's screen"
@@ -44,11 +73,14 @@ for p in 80 443; do
   b="$(remote "docker port $NODE $p")"
   [[ "$b" == "127.0.0.1:$p" ]] && pass "port $p bound to loopback only" || fail "port $p bound to '$b', expected 127.0.0.1:$p (research R2)"
 done
+# State and secrets.auto.tfvars live in $SV_TF_DIR, as in make rebuild and the Jenkins plan stage.
+boot_vars="-var cluster_state_path=$SV_TF_DIR/cluster.tfstate -var-file=$SV_TF_DIR/secrets.auto.tfvars"
 for root in cluster bootstrap; do
-  set +e; remote "terraform -chdir=$MINI_INFRA/terraform/$root plan -detailed-exitcode -input=false -lock=false >/dev/null 2>&1"; rc=$?; set -e
+  vars=""; [[ $root == bootstrap ]] && vars="$boot_vars"
+  set +e; remote "terraform -chdir=$MINI_INFRA/terraform/$root plan -detailed-exitcode -input=false -lock=false $vars >/dev/null 2>&1"; rc=$?; set -e
   [[ $rc == 0 ]] && pass "terraform/$root: no changes" || fail "terraform/$root: plan exit $rc (2 = changes pending)"
 done
-tracked="$(git -C "$SV_ROOT/sorted-vintage-infra" ls-files '*.tfvars' '*.tfvars.json')"
+tracked="$(git -C "$INFRA" ls-files '*.tfvars' '*.tfvars.json')"
 [[ -z "$tracked" ]] && pass "no tfvars tracked" || fail "tfvars tracked in Git: $tracked"
 
 echo "Argo CD (Ticket 1.3)"
@@ -78,18 +110,23 @@ for f in "${good_files[@]}"; do
 done
 
 echo "Stub BFF (Ticket 1.5)"
-for env in dev prod; do
-  code="$(remote "curl -s -o /dev/null -w '%{http_code}' --resolve $env.sortedvtg.lan:443:127.0.0.1 https://$env.sortedvtg.lan/healthz" || true)"
-  [[ "$code" == 200 ]] && pass "$env.sortedvtg.lan/healthz returns 200" || fail "$env.sortedvtg.lan/healthz returned '$code'"
+# In-cluster, through the API server's service proxy: the BFF has no Ingress until its pages
+# arrive in Sprint 2. get --raw fails on any non-2xx answer.
+for ns in sv-dev sv-prod; do
+  body="$(k "get --raw /api/v1/namespaces/$ns/services/http:bff:80/proxy/healthz" 2>&1 || true)"
+  [[ "$body" == *'"ok"'* ]] && pass "$ns: bff /healthz answers ok" || fail "$ns: bff /healthz returned '$body'"
 done
 
 echo "Prod gate (T080, ADR-0002)"
-gh api "repos/$SV_OWNER/sorted-vintage-gitops/environments/prod" \
-  --jq '.protection_rules[] | select(.type=="required_reviewers") | .reviewers | length' 2>/dev/null | grep -qv '^0$' \
+gh_read "repos/$SV_OWNER/sorted-vintage-gitops/environments/prod" \
+  '.protection_rules[] | select(.type=="required_reviewers") | .reviewers | length' 2>/dev/null | grep -qv '^0$' \
   && pass "gitops environment prod has a required reviewer" || fail "gitops environment prod is missing or has no required reviewer"
 [[ -f "$G/.github/workflows/prod-gate.yml" ]] && pass "prod-gate workflow present" || fail "missing .github/workflows/prod-gate.yml in gitops"
 
 echo "Jenkins (Ticket 1.7, research R15)"
+if (( LOCAL )); then
+  skip "the Air's Jenkins checks (run this script from the Air for those)"
+else
 JUSER="${SV_JENKINS_USER:-ricomillz}"  # the Air's Jenkins account, not the mini's login of the same name
 [[ "$(id -un)" != "$JUSER" ]] || fail "run this from your everyday account, not as $JUSER"
 dsmemberutil checkmembership -U "$JUSER" -G admin | grep -q 'is not a member' \
@@ -109,17 +146,23 @@ pass "Jenkins runs as the Air's $JUSER"
 pass "the agent key is not readable from your everyday account"
 code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/login || true)"
 [[ "$code" == 200 ]] && pass "Jenkins answers at localhost:8080" || fail "Jenkins returned '$code'"
+fi
 remote "grep -q '^restrict .*sv-jenkins-agent@' ~/.ssh/authorized_keys" \
   && pass "the mini authorizes the agent key with restrict" || fail "agent key missing or unrestricted on $MINI (scripts/jenkins/authorize-agent-key.sh)"
 remote "export PATH=/opt/homebrew/opt/openjdk@21/bin:\$PATH; java -version" >/dev/null 2>&1 \
   && pass "Java is available for the agent on the mini" || fail "Java is missing on $MINI (openjdk@21)"
 
 echo "SonarQube Cloud (T105)"
-gh api "repos/$SV_OWNER/sorted-vintage-app/commits/main/check-runs" --jq '.check_runs[].name' 2>/dev/null | grep -qi sonar \
+gh_read "repos/$SV_OWNER/sorted-vintage-app/commits/main/check-runs" '.check_runs[].name' 2>/dev/null | grep -qi sonar \
   && pass "SonarQube Cloud check on sorted-vintage-app main" || fail "no SonarQube Cloud check on the latest sorted-vintage-app main commit"
+# The free plan gates pull requests, not main, so check the newest analysed pull request (public API).
+SONAR_PROJECT="${SONAR_PROJECT:-$(tr '[:upper:]' '[:lower:]' <<<"$SV_OWNER")_sv-bff}"
+gate="$(curl -fsS "https://sonarcloud.io/api/project_pull_requests/list?project=$SONAR_PROJECT" \
+  | jq -r '[.pullRequests[] | {k: (.key|tonumber), g: .status.qualityGateStatus}] | max_by(.k) | "\(.k) \(.g)"' 2>/dev/null || true)"
+[[ "$gate" == *" OK" ]] && pass "quality gate passed on $SONAR_PROJECT pull request #${gate%% *}" \
+  || fail "no passing quality gate on the newest $SONAR_PROJECT pull request (got '${gate:-nothing}')"
 
 echo
 echo "Sprint 1 verification passed."
 echo "Manual checks left: make down / make up in under 10 minutes with Grafana history intact,"
-echo "the memory measurement in sprint1_retro.md, an infra-terraform run with a paused approval on the lab agent,"
-echo "and the SonarQube Cloud quality gate on a pull request."
+echo "the memory measurement in sprint1_retro.md, and an infra-terraform run with a paused approval on the lab agent."
