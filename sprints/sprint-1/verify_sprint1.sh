@@ -164,5 +164,4 @@ gate="$(curl -fsS "https://sonarcloud.io/api/project_pull_requests/list?project=
 
 echo
 echo "Sprint 1 verification passed."
-echo "Manual checks left: make down / make up in under 10 minutes with Grafana history intact,"
-echo "the memory measurement in sprint1_retro.md, and an infra-terraform run with a paused approval on the lab agent."
+echo "Manual checks (make down / make up timing, memory, a paused-approval run) are recorded in sprint1_retro.md."
