@@ -50,6 +50,7 @@ Sprint 1 built the platform every user story runs on. One Terraform apply create
 - `infra-terraform`: fmt, validate, tfsec, plan, a manual approval before any apply, then `verify` runs the sprint's verify script on the mini (T107).
 - Terraform state and `secrets.auto.tfvars` moved to `~/sv-terraform` on the mini, shared by `make rebuild` and Jenkins.
 - SonarQube Cloud scans app pull requests after tests; the quality gate passed on app #4 (T105).
+- Approval run, build #6 on 2026-11-05: a `terraform_data` record (infra #25) gave the pipeline a harmless change. The cluster plan showed `1 to add`, the build paused at `approve` until Richard clicked Apply, applied it (bootstrap: no changes), found all 28 apps healthy and passed `verify`.
 
 ### Ticket 1.8: Verify and Measure (T031, T032)
 
@@ -103,7 +104,8 @@ What it means:
 ## Follow-Ups
 
 - [x] `make down` / `make up` back to healthy in under 10 minutes with history intact (Ticket 1.6, above).
-- [ ] An `infra-terraform` run that pauses for approval and applies (Ticket 1.7 acceptance; build #4 had no changes, so it skipped both).
+- [x] An `infra-terraform` run that pauses for approval and applies (Ticket 1.7 acceptance; build #6, above).
+- [ ] The cluster apply prints the Kind client and CA certificates as outputs in the Jenkins log. They are public certificates (the client key is marked sensitive and hidden), but marking those outputs sensitive too would keep the log clean.
 - [ ] Re-measure memory at the end of Sprint 2 with the services and traffic generator running.
 - [ ] Docker Desktop over SSH cannot pull a new Kind node image without the keychain (`spikes.md`, T008): pre-pull it in `bot`'s desktop session as part of any Kind upgrade.
 - [ ] Switch `tfsec` to `trivy config`; tfsec is being folded into Trivy.
