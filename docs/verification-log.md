@@ -8,11 +8,7 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 
 ## Open checks
 
-| Ticket | Check | What is missing |
-| --- | --- | --- |
-| 0.2 | A commit with a test key, if forced past the hook, fails the `checks` workflow | Only the local hook was tested (Sprint 0 retro). Push a branch with a fake key using `git commit --no-verify` and confirm `secret-scan` fails on its PR; then close the PR and delete the branch. |
-| 0.2 | A direct push to `main` is rejected | The ruleset was applied, but the push test is not recorded. `git push origin HEAD:main` from a clean clone should be refused. |
-| 1.4 | A pull request that adds a bad manifest under a service overlay fails its policy check | Run locally with `scripts/policy-check.sh` only (`spikes.md`, T026: "CI run pending"). Open a throwaway gitops PR with a bad overlay and confirm the `policy` job fails. |
+None. The three checks that were never run (two from 0.2, one from 1.4) were run on 2026-11-05; see their rows below.
 
 ## Sprint 0
 
@@ -21,8 +17,8 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 | 0.1 | The old SonarQube token is revoked and the old RDS password no longer works | The AWS account that held RDS, EC2 and the SonarQube host no longer exists; the class SonarQube server is believed gone | Pass, by removal | 2026-10-28 | Sprint 0 retro |
 | 0.1 | `audit-old-secrets.sh` reports zero findings, or each is listed with its fix | gitleaks over 12 public repos found nothing; the file-history check found Terraform state and tfvars in two repos, which were made private | Pass | 2026-10-28 | Sprint 0 retro |
 | 0.2 | A commit with a test AWS key is blocked locally | Test commit with a fake key | Pass: gitleaks rule `aws-access-token` blocked it | 2026-10-28 | Sprint 0 retro |
-| 0.2 | ...and, if forced, fails the `checks` workflow | | **Open** | | [Open checks](#open-checks) |
-| 0.2 | A direct push to `main` is rejected | | **Open** | | [Open checks](#open-checks) |
+| 0.2 | ...and, if forced, fails the `checks` workflow | Randomly generated fake AWS-style key ID committed with `--no-verify` on a throwaway branch and PR | Pass: `secret-scan` failed, gitleaks rule `aws-access-token`; GitHub push protection did not block a key ID alone, so gitleaks is the layer that caught it. PR closed unmerged, branch deleted | 2026-11-05 | infra #28 (closed) |
+| 0.2 | A direct push to `main` is rejected | Empty commit pushed to `main` from a throwaway clone, after confirming the ruleset has no bypass actors | Pass: "push declined due to repository rule violations: changes must be made through a pull request"; `main` unchanged | 2026-11-05 | ruleset `protect-main` |
 | 0.2 | All three repos show a green `checks` run on their first PR | First PR in each repo | Pass: `pre-commit` and `secret-scan` green | 2026-10-28 | Sprint 0 retro |
 | 0.3 | `kind version`, `terraform version`, `docker info` succeed on the mini | Ran on the mini | Pass; disk freed from 7.8 GB to 73 GB first | 2026-10-28 | Sprint 0 retro |
 | 0.4 | `ssh mac-mini hostname` succeeds with key login | From the Air | Pass | 2026-10-28 | Sprint 0 retro |
@@ -62,7 +58,7 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 | Check | How | Result | Date | Evidence |
 | --- | --- | --- | --- | --- |
 | `kubectl apply --dry-run=server` rejects every `tests/policy/bad/` file and accepts `good/` | Server-side dry runs against the lab | Pass: 6 rejected, 3 accepted | 2026-11-03, rechecked 2026-11-05 | `spikes.md` T026; `verify_sprint1.sh` |
-| A PR adding a bad manifest under a service overlay fails its policy check | `scripts/policy-check.sh` locally | **Partial**: local only | 2026-11-03 | [Open checks](#open-checks) |
+| A PR adding a bad manifest under a service overlay fails its policy check | Throwaway gitops PR pointing the dev BFF overlay at `docker.io/library/nginx:1.29` | Pass: the `policy` job failed with "Images must come from ghcr.io/rclaye/; not allowed: docker.io/library/nginx:1.29"; PR closed unmerged, branch deleted | 2026-11-05 | gitops #21 (closed) |
 
 ### Ticket 1.5: service template and the delivery path
 
