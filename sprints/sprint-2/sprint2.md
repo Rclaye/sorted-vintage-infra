@@ -2,7 +2,7 @@ Sorted Vintage — Sprint 2 Actionable Engineering Specification
 Document Status: Draft for review
 Target Release: Sprint 2, Seller Lists an Item (Nov 6 – Nov 19, 2026)
 Author: Platform Engineering
-Source: specs/001-marketplace-local-cloud/tasks.md, Phase 3 (User Story 1, T033–T052), T113 and T115–T119
+Source: specs/001-marketplace-local-cloud/tasks.md, Phase 3 (User Story 1, T033–T052), T113 and T115–T120
 
 1. Executive Summary & Sprint 2 Objective
 
@@ -16,7 +16,8 @@ On a fresh dev environment, a new account signs up, completes onboarding and pub
 Decisions carried in
 - Connected accounts use Accounts v2 with `dashboard: none` and Stripe-hosted onboarding (research R17, spike T009). Express accounts are not available to this platform.
 - Stripe events reach the cluster through `stripe listen` running inside it (research R4); events missed while the lab is off are reconciled every 5 minutes (R5).
-- The bff client's user tokens carry the audiences `listings`, `orders` and `payments`; services check their own audience and the BFF checks `azp == "bff"` (T025 spike). Keycloak realms are imported once, so client changes are made in the live realm and in the realm files together.
+- The bff client's user tokens carry the audiences `listings`, `orders` and `payments`; services check their own audience and the BFF checks `azp == "bff"` (T025 spike).
+- Keycloak imports a realm file only once. Realm and client changes are never made by hand in the live realm (Principle I): T120 adds a Job that applies them from Git on every sync, before any Sprint 2 client change.
 - Every app image comes from `ghcr.io/rclaye/` (Kyverno, T026), so the Stripe CLI image is mirrored there.
 - One ticket per pull request where possible; application code is written in the app chat (`src/sorted-vintage-app`), manifests and verification in the main chat. Each ticket says which repositories it touches.
 
@@ -29,6 +30,7 @@ Decisions carried in
 | Stripe forwarder, two `stripe listen` containers | `sv-dev`, `sv-prod` | part of 0.4 GB with ingress |
 | BFF Ingress for `dev.sortedvtg.lan` and `prod.sortedvtg.lan` | Traefik | none |
 | Seed job (Argo CD PostSync hook) | `sv-dev` only | runs and exits |
+| Keycloak config Job (keycloak-config-cli, PostSync hook) | `keycloak` | runs and exits |
 
 Measured before the sprint: 6.2 GiB of pods (Sprint 1 retro). Expected after: about 7.5 GiB, still well under the 11 GB line. Ticket 2.8 measures it.
 
@@ -42,27 +44,31 @@ Story: As the platform owner, I want the assumptions User Story 1 rests on teste
 Implementation Requirements:
 - T052 Onboarding redirect: with the Stripe CLI as `bot`, create a test v2 account and an Account Link whose `return_url` and `refresh_url` are `https://dev.sortedvtg.lan/sell/onboarding`, complete onboarding in the Air's browser through the SSH tunnel, and record whether the browser lands back on the lab. If it does not, T043 uses `https://localhost:8443/sell/onboarding`. Close the test account afterwards.
 - JVM on the lab: build a minimal Spring Boot 3 / Java 21 image for `linux/arm64`, run it on a throwaway cluster `sv-spike` with the Kyverno policies, and record its working set at idle and the startup time. Settle the heap flags (`-XX:MaxRAMPercentage`) and the memory limit Listings will use against the 0.4 GB budget.
-- Seller token for scripts: decide how `verify_sprint2.sh` and the seed job obtain a seller's access token. Options: a dev-only Keycloak client with direct-access grants, limited to `sv-dev`; or the seed job creating users through the Keycloak admin API and the script driving the BFF login form. Record the choice and why; prod is only ever checked read-only.
+- Seller token for scripts: decide how `verify_sprint2.sh` and the seed job obtain a seller's access token. Options: a dev-only Keycloak client with direct-access grants, limited to `sv-dev`; or the script driving the BFF login form. Either way the verify seller is one dedicated `sv-dev` user declared through T120, and its password is generated into `secrets.auto.tfvars` and reaches `sv-dev` as a Terraform-created Secret, never in Git. Record the choice and why; prod is only ever checked read-only.
+- Onboarding without a browser: in a Stripe test sandbox, complete a v2 account's requirements through the API so its `card_payments` and `stripe_transfers` capabilities turn `active`. The seed sellers (T051) and the verify seller depend on it. Record the exact calls; if it cannot be done, the seed and verify sellers are onboarded once by hand in the browser and the spike says so.
+- keycloak-config-cli (T120): on `sv-spike`, import the realms, change a client in the realm file, and confirm the Job applies it on the next sync and leaves users alone.
 - Keycloak check: confirm in the live `sv-dev` realm that the `bff` client's redirect URIs cover `https://dev.sortedvtg.lan:8443/auth/callback`, and that a registration email reaches Mailpit.
 
 Acceptance Criteria Verification:
-- `sprints/sprint-2/spikes.md` records the redirect result, the JVM memory and flags, the token decision and the Keycloak check.
+- `sprints/sprint-2/spikes.md` records the redirect result, the JVM memory and flags, the token decision, browser-free onboarding, the keycloak-config-cli result and the Keycloak check.
 - No change to the lab cluster beyond reads; spikes run on `sv-spike`, deleted afterwards.
 
-Ticket 2.2 — Groundwork: Java in CI and the BFF Ingress (T116, T117, T118)
+Ticket 2.2 — Groundwork: Java in CI, the BFF Ingress and Keycloak from Git (T116, T117, T118, T120)
 Owner: Platform Engineer
-Repos: app (`.github/workflows/build.yml`), gitops (`services/bff`), infra (`jenkins/Jenkinsfile`)
+Repos: app (`.github/workflows/build.yml`), gitops (`services/bff`, `platform/keycloak`), infra (`jenkins/Jenkinsfile`)
 Story: As a developer, I want a Java service to travel the same delivery path as the Python ones, and the marketplace to have an address.
 
 Implementation Requirements:
 - T116 Extend `build.yml` so a service with a `build.gradle.kts` builds with Gradle on the arm64 runner (tests, then image), runs Trivy and the SonarQube Cloud scan exactly as Python services do, and hands its tag to gitops through `sv-deployer`. Create SonarQube Cloud projects `rclaye_sv-listings` and `rclaye_sv-payments`, each with its `sonar-project.properties`.
 - T117 Ingress for the BFF in `gitops/services/bff/overlays/{dev,prod}`: hosts `dev.sortedvtg.lan` and `prod.sortedvtg.lan` on Traefik with the default TLS certificate.
 - T118 Jenkins `verify` runs the newest `sprints/sprint-*` folder that contains its `verify_sprintN.sh` (done in the planning pull request), so a sprint folder can land before its script.
+- T120 keycloak-config-cli as a `PostSync` Job in `gitops/platform/keycloak/`, applying the realm files' clients, scopes and user profile on every sync; then the `sv-dev` verify seller and the seed client are added through it.
 
 Acceptance Criteria Verification:
 - A pull request that adds a stub Gradle service shows build, Trivy and the SonarQube Cloud quality gate; after merge its dev tag reaches gitops with no manual step.
 - `https://dev.sortedvtg.lan:8443/healthz` answers 200 from the Air's browser through the tunnel.
 - `infra-terraform` stays green with `sprints/sprint-2/` present and no `verify_sprint2.sh` yet.
+- A client setting changed in the realm file reaches the live `sv-dev` realm after one sync, with no admin-console edit.
 
 Ticket 2.3 — Listings Service and Its Data (T035, T036, T050 listings)
 Owner: Application Engineer
@@ -99,7 +105,7 @@ Story: As a seller, I complete Stripe-hosted onboarding once, and the marketplac
 Implementation Requirements:
 - T034 first: contract tests for the onboarding link, payout status and the Connect webhook.
 - T042 service from the template with Alembic `0001_connect`; T043 onboarding link and payout status on Accounts v2 (R17), using the URL settled in Ticket 2.1; T044 the Connect webhook with signature check and the idempotent event inbox; T045 reconciliation at startup and every 5 minutes.
-- T049 `gitops/services/stripe-forwarder/`: one Deployment per namespace, two `stripe listen` containers (R4), image mirrored to `ghcr.io/rclaye/`, the API key from each environment's `stripe` Secret.
+- T049 `gitops/services/stripe-forwarder/`: one Deployment per namespace, two `stripe listen` containers (R4), the API key from each environment's `stripe` Secret. The image comes from `app/.github/workflows/mirror.yml`, which copies a pinned upstream digest to `ghcr.io/rclaye/stripe-cli` after a Trivy scan; the manifests pin that digest.
 - T050 (payments part) manifests with `pg-payments-app` and the `stripe` Secret.
 
 Acceptance Criteria Verification:
@@ -125,7 +131,7 @@ Repos: app (`tools/seed`), gitops (`services/seed`)
 Story: As the operator, I want a fresh dev environment to look like a marketplace, so that demos and later traffic have something to work on.
 
 Implementation Requirements:
-- T051 Argo CD PostSync hook in `sv-dev`: demo sellers in Keycloak with onboarded test connected accounts, 50 listings with photos, idempotent on re-run; how it signs in follows the Ticket 2.1 token decision.
+- T051 Argo CD PostSync hook in `sv-dev`: demo sellers in Keycloak with onboarded test connected accounts, 50 listings with photos, idempotent on re-run. Users are created through the seed client declared by T120; sellers are onboarded the browser-free way the Ticket 2.1 spike records.
 
 Acceptance Criteria Verification:
 - After a sync, browse in dev shows 50 seeded listings; running the hook again changes nothing.
@@ -136,16 +142,16 @@ Repos: infra (`sprints/sprint-2`, `docs/verification-log.md`)
 Story: As the platform owner, I want User Story 1 checked by a script on every Jenkins build, and the memory budget re-measured with real services.
 
 Implementation Requirements:
-- T115 `sprints/sprint-2/verify_sprint2.sh` (Air mode and `MINI=local`, like `verify_sprint1.sh`): first runs `verify_sprint1.sh`, so Sprint 1's checks keep guarding every build; then checks Listings and Payments health in both namespaces, the BFF through its Ingress (with the mkcert CA), the forwarder ready, bad Stripe signatures refused on both webhooks, the seeded listings searchable, and a scripted draft, two photos and publish for a pre-onboarded dev seller that appears in search within 5 seconds (T113). Bad photo type and size are refused. Prod is read-only.
+- T115 `sprints/sprint-2/verify_sprint2.sh`, after T046 and T051. Both modes first run `verify_sprint1.sh`, then read-only checks: Listings and Payments health in both namespaces, the BFF through its Ingress (with the mkcert CA), the forwarder ready, the seeded listings searchable. From the Air only, never in the Jenkins stage: bad Stripe signatures refused on both webhooks, and in `sv-dev` a scripted draft, two photos and publish by the verify seller that appears in search within 5 seconds (T113) and is then deleted, plus bad photo type and size refused. Prod is read-only.
 - T119 Re-measure memory as in T032, and write `sprints/sprint-2/sprint2_retro.md`; add every acceptance check above to `docs/verification-log.md`.
 
 Acceptance Criteria Verification:
-- `verify_sprint2.sh` passes from the Air and as the Jenkins `verify` stage.
+- `verify_sprint2.sh` passes from the Air (all checks) and as the Jenkins `verify` stage (read-only checks).
 - The retro records memory by component next to the plan, and the verification log has a row for every Sprint 2 acceptance check.
 
 4. Sprint Verification
 
-Run `sprints/sprint-2/verify_sprint2.sh` from the MacBook Air with the lab up; Jenkins runs it with `MINI=local` at the end of every `infra-terraform` build once it is on `main`. It makes no change to prod and only scripted, idempotent writes in dev. Quickstart step 2 is run once by hand for the SC-001 timings, which the script cannot measure through Stripe-hosted onboarding.
+Run `sprints/sprint-2/verify_sprint2.sh` from the MacBook Air with the lab up for every check. Jenkins runs it with `MINI=local` at the end of every `infra-terraform` build once it is on `main`, and in that mode it only reads, as the plan's Complexity Tracking allows. From the Air it also makes one scripted publish in `sv-dev` by the verify seller and deletes it again; it never writes to prod. Quickstart step 2 is run once by hand for the SC-001 timings, which the script cannot measure through Stripe-hosted onboarding.
 
 5. Out of Scope for Sprint 2
 
