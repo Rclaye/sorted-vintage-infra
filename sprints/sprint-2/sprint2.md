@@ -45,7 +45,7 @@ Implementation Requirements:
 - T052 Onboarding redirect: with the Stripe CLI as `bot`, create a test v2 account and an Account Link whose `return_url` and `refresh_url` are `https://dev.sortedvtg.lan/sell/onboarding`, complete onboarding in the Air's browser through the SSH tunnel, and record whether the browser lands back on the lab. If it does not, T043 uses `https://localhost:8443/sell/onboarding`. Close the test account afterwards.
 - JVM on the lab: build a minimal Spring Boot 3 / Java 21 image for `linux/arm64`, run it on a throwaway cluster `sv-spike` with the Kyverno policies, and record its working set at idle and the startup time. Settle the heap flags (`-XX:MaxRAMPercentage`) and the memory limit Listings will use against the 0.4 GB budget.
 - Seller token for scripts: decide how `verify_sprint2.sh` and the seed job obtain a seller's access token. Options: a dev-only Keycloak client with direct-access grants, limited to `sv-dev`; or the script driving the BFF login form. Either way the verify seller is one dedicated `sv-dev` user declared through T120, and its password is generated into `secrets.auto.tfvars` and reaches `sv-dev` as a Terraform-created Secret, never in Git. Record the choice and why; prod is only ever checked read-only.
-- Onboarding without a browser: in a Stripe test sandbox, complete a v2 account's requirements through the API so its `card_payments` and `stripe_transfers` capabilities turn `active`. The seed sellers (T051) and the verify seller depend on it. Record the exact calls; if it cannot be done, the seed and verify sellers are onboarded once by hand in the browser and the spike says so.
+- Onboarding without a browser: done, and it cannot be done. Stripe refuses an API-side terms acceptance for accounts where it collects requirements, so each seed seller and the verify seller is onboarded once by hand in the dev sandbox and its account then stays ready (spikes.md).
 - keycloak-config-cli (T120): on `sv-spike`, import the realms, change a client in the realm file, and confirm the Job applies it on the next sync and leaves users alone.
 - Keycloak check: confirm in the live `sv-dev` realm that the `bff` client's redirect URIs cover `https://dev.sortedvtg.lan:8443/auth/callback`, and that a registration email reaches Mailpit.
 
@@ -131,7 +131,7 @@ Repos: app (`tools/seed`), gitops (`services/seed`)
 Story: As the operator, I want a fresh dev environment to look like a marketplace, so that demos and later traffic have something to work on.
 
 Implementation Requirements:
-- T051 Argo CD PostSync hook in `sv-dev`: demo sellers in Keycloak with onboarded test connected accounts, 50 listings with photos, idempotent on re-run. Users are created through the seed client declared by T120; sellers are onboarded the browser-free way the Ticket 2.1 spike records.
+- T051 Argo CD PostSync hook in `sv-dev`: demo sellers in Keycloak with onboarded test connected accounts, 50 listings with photos, idempotent on re-run. Users are created through the seed client declared by T120. Each demo seller is onboarded once by hand in the dev sandbox (Stripe refuses an API-side terms acceptance, Ticket 2.1), and the seed job links the Keycloak user to that existing account.
 
 Acceptance Criteria Verification:
 - After a sync, browse in dev shows 50 seeded listings; running the hook again changes nothing.

@@ -1,0 +1,73 @@
+# Sprint 2 spikes
+
+Results of the spikes in Ticket 2.1, run on 2026-11-05 on the Mac mini as `bot` and from the Air's browser. Each entry says what was done, the result and what it changes. Throwaway clusters were named `sv-spike` and deleted afterwards; the lab cluster was only read, and the Stripe work stayed in the dev sandbox.
+
+## Live Keycloak check (read-only)
+
+**Result: pass.** With `kcadm.sh` inside `keycloak-0` against the live realms:
+
+| Check | Result |
+| --- | --- |
+| `bff` redirect URIs, dev | `https://dev.sortedvtg.lan/*` and `https://dev.sortedvtg.lan:8443/*`, so `/auth/callback` is covered; prod the same with `prod.` |
+| `bff` client | Confidential, authorization-code flow on, direct-access grants **off** |
+| Sign-up | `registrationAllowed`, `verifyEmail` and `loginWithEmailAllowed` on in both realms |
+| SMTP | `mailpit.sv-<env>.svc.cluster.local:1025`, the same as the realm files in Git |
+
+- `kcadm.sh get realms/<r> --fields smtpServer` prints `{}` for nested objects. Read the realm unfiltered, or use `smtpServer(*)`.
+- Not proven yet: a verification email arriving in Mailpit. That needs one real sign-up, which comes with the first BFF login (T047).
+
+## JVM memory (T035)
+
+**Result: pass.** A minimal Spring Boot web app with Actuator, Java 21, the OpenTelemetry Java agent 2.33.1 (exporters off) in `eclipse-temurin:21-jre`, built for `linux/arm64`, run non-root on `sv-spike` under a 512 Mi limit. Image 390 MB, jar 22 MB.
+
+| Variant | Startup | Ready | Idle | After 500 requests | Restarts |
+| --- | --- | --- | --- | --- | --- |
+| A: G1, `-XX:MaxRAMPercentage=75` | 3.6 s | 8 s | 230 MiB | 241 MiB | 0 |
+| B: SerialGC, `-XX:MaxRAMPercentage=60 -Xss512k` | 3.4 s | 8 s | 274 MiB | 274 MiB | 0 |
+
+- **Decision for T035:** variant A, the default collector with `-XX:MaxRAMPercentage=75`, a memory limit of 512 Mi and a request of about 320 Mi. The real Listings service adds JPA, Flyway and security, so expect 350–400 MiB, inside the 0.4 GB budget; measure again once it exists (T119).
+- The pod passed the Kyverno rules for non-root, requests and limits and host paths. It failed `restrict-image-registry` only, as it should for a locally built image.
+- **Open decision:** Spring Initializr's default is now **Spring Boot 4.1.2**, not 3 as plan.md and T035 say. Recommendation: Boot 4, since Boot 3's free support has ended. Confirm before T035.
+- The lab used 6.6 of 11.9 GiB during the spike, so the extra cluster fitted.
+
+## Browser-free Stripe onboarding (T043, T051, T115)
+
+**Result: not possible; one hosted-page visit is needed.** Dev sandbox, Stripe CLI 1.55.6, a test v2 account created with the research R17 settings (`dashboard: none`, fees `application`, losses `stripe`, merchant and recipient configurations).
+
+- Both capabilities start `restricted`. `stripe_transfers` needs only the terms-of-service attestation; `card_payments` needs the full profile (identity, address, date of birth, SSN, phone, MCC, statement descriptor, business URL, product description). `external_account` gates payouts only, not `ready`.
+- **Blocker:** setting `identity.attestations.terms_of_service.account` through the API is refused with "You cannot accept the Terms of Service on behalf of accounts where requirement collection is owned by Stripe". That is our setup, where Stripe is the losses collector.
+- Everything else prefills through the API. Test values that worked: `+10000000000` as the phone (`+15555550100` was refused), date of birth 1901-01-01, address line `address_full_match` in San Francisco, CA 94111, MCC 5931, business URL `https://accessible.stripe.com`. After prefill Stripe still asked for the full test SSN `000000000` and a statement descriptor.
+- The CLI prints a "Running in <sandbox>" line before the JSON; drop line 1 before `jq`. v2 `GET` takes `?include=` in the path, and closing an account needs `{"applied_configurations":["merchant","recipient"]}`.
+
+**What it changes:** the seed job (T051) and the verify seller (T115) cannot be made `ready` without a browser. Each seller is onboarded **once by hand** in the dev sandbox, and its Stripe account then stays ready, so the seed job links a seller to an existing account instead of creating one. T051 and T115 say so.
+
+## Onboarding redirect (T052, research R6)
+
+**Result: pass.** Richard completed Stripe's hosted onboarding in the Air's browser, through the SSH tunnel on port 8443, for a prefilled test account.
+
+- The Account Link accepted `https://dev.sortedvtg.lan:8443/sell/onboarding` as `return_url` and `?refresh=1` as `refresh_url`. The browser landed on `https://dev.sortedvtg.lan:8443/sell/onboarding` and Traefik answered 404, because the BFF has no page there yet. So the `localhost` fallback is not needed, and T043 uses `https://<env>.sortedvtg.lan:8443/sell/onboarding`. A URL without the port does not reach the lab from the Air.
+- Afterwards `card_payments` and `stripe_transfers` were both `active` with no requirements left: payout status `ready`.
+- Steps on the hosted page, with the details prefilled: payout bank (a Stripe Link popup appears: choose "Finish without saving"; the test account ending 6789 succeeds, 2227, 1113, 1116 and 3335 simulate failures), public details, review, "Agree and submit". About five minutes by hand, inside SC-001's five-minute target.
+- **Statement descriptor:** the API accepted `SORTED VINTAGE`, but the hosted page rejected it: it must resemble the business URL or legal name (`ACCESSIBLE` passed). T043 and T051 derive the descriptor from the seller's name or business URL, never a fixed brand string.
+- The support address needs `address_full_match` in test mode, and the business name is optional.
+- The test account was closed afterwards.
+
+## keycloak-config-cli (T120)
+
+**Result: pass.** Keycloak 26.8.1 in `start-dev` on `sv-spike` with the `sv-dev` realm file from gitops, then `adorsys/keycloak-config-cli:6.5.1-26.5.5` as a Kubernetes Job. A user "alice" was created through the admin API first, standing in for a sign-up.
+
+| Step | `bff` redirect URIs | alice | Clients | SMTP |
+| --- | --- | --- | --- | --- |
+| Before | 2 | present | 10 | Mailpit |
+| Run 1, file unchanged | 2 | present | 10 | unchanged |
+| Run 2, file adds a redirect URI | 3, new one applied | present | 10 | unchanged |
+| Run 3, same file again | 3, no change | present | 10 | unchanged |
+
+- The realm files' `${SV_DEV_*_SECRET}` placeholders work unchanged with `IMPORT_VARSUBSTITUTION_ENABLED=true`, prefix `${` and suffix `}`, reading the same Secret.
+- The newest published build (made for Keycloak 26.5) works against 26.8.1. Pin the image and check it when Keycloak is upgraded.
+- After a restart alice was gone: dev mode keeps its database in the pod. The lab's Keycloak uses Postgres, so that does not apply there.
+- T120 can go ahead as planned. Realm files in Git stay the record of the realm; users are never in them.
+
+## Script token (T051, T115)
+
+**Decision: scripts log in through the BFF's login form**, as one dedicated `sv-dev` verify seller, like a browser would. No direct-access-grants client is created. The verify seller's password is generated into `secrets.auto.tfvars` and reaches `sv-dev` as a Terraform Secret, and the seed job creates users through a `sv-dev` client limited to user management (both declared through T120). Recorded because it keeps Keycloak's client settings unchanged and exercises the real sign-in path, at the cost of a little more scripting (cookies and form fields).
