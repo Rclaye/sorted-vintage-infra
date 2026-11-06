@@ -1,7 +1,8 @@
 // infra-terraform (T014, ADR-0002, constitution Principle III): runs on the mini as bot (label lab).
 // fmt, validate, tfsec, plan; if anything would change, wait for a person to approve, then apply.
 // DESTROY=true plans a destroy and needs two approvals. State and secrets.auto.tfvars are in
-// bot's private ~/sv-terraform, shared with make rebuild.
+// bot's private ~/sv-terraform, shared with make rebuild. Then verify (T107) runs the current
+// sprint's verify script on the mini (reads and server-side dry runs only) and fails the build if it fails.
 pipeline {
   agent { label 'lab' }
   options {
@@ -12,11 +13,14 @@ pipeline {
   parameters {
     booleanParam(name: 'DESTROY', defaultValue: false,
       description: 'Plan and apply terraform destroy for bootstrap, then cluster. Needs two approvals. Garage data in ~/sv-data is kept.')
+    string(name: 'SPRINT', defaultValue: '',
+      description: 'Sprint whose sprints/sprint-N/verify_sprintN.sh the verify stage runs. Empty: the highest sprints/sprint-* folder.')
   }
   environment {
     PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
     TF_IN_AUTOMATION = '1'
     TF_INPUT = '0'
+    SV_OWNER = 'Rclaye'
   }
   stages {
     stage('fmt') {
@@ -77,6 +81,24 @@ pipeline {
             sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
             sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
             sh 'scripts/lab/rebuild-wait.sh'
+          }
+        }
+      }
+    }
+    stage('verify') {
+      when { expression { !params.DESTROY } }
+      steps {
+        // The verify script reads the GitOps repo too: a read-only checkout beside the workspace.
+        // poll and changelog off, so GitOps commits never trigger this job.
+        dir("${env.WORKSPACE}@gitops") {
+          git(url: "https://github.com/${env.SV_OWNER}/sorted-vintage-gitops.git", branch: 'main', poll: false, changelog: false)
+        }
+        script {
+          def n = params.SPRINT?.trim() ?: sh(returnStdout: true,
+            script: "ls -d sprints/sprint-* | sed 's|.*/sprint-||' | sort -n | tail -1").trim()
+          if (!(n ==~ /\d+/)) { error("SPRINT must be a number, got '${n}'") }
+          withEnv(['MINI=local', "SV_GITOPS=${env.WORKSPACE}@gitops", "SPRINT_N=${n}"]) {
+            sh 'bash "sprints/sprint-$SPRINT_N/verify_sprint$SPRINT_N.sh"'
           }
         }
       }
