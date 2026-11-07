@@ -68,6 +68,19 @@ Results of the spikes in Ticket 2.1, run on 2026-11-05 on the Mac mini as `bot` 
 - After a restart alice was gone: dev mode keeps its database in the pod. The lab's Keycloak uses Postgres, so that does not apply there.
 - T120 can go ahead as planned. Realm files in Git stay the record of the realm; users are never in them.
 
+**Second run, 2026-11-06: pass with the lab's setup.** The committed Job (gitops `platform/keycloak/realms/config-cli-job.yaml`, rendered by kustomize as Argo CD does) against Keycloak installed like the lab: keycloakx chart 7.4.0 with the lab's values, `kc.sh start`, `KC_HOSTNAME=https://auth.sortedvtg.lan:8443`, backchannel dynamic, `xforwarded` proxy, Postgres.
+
+| Step | `bff` redirect URIs | alice | Clients | `bff` secret |
+| --- | --- | --- | --- | --- |
+| Before (start-up import) | 2 | present | 10 | equals the Secret |
+| Run 1, file unchanged | 2 | present | 10 | equals the Secret |
+| Run 2, file adds a redirect URI | 3, new one applied | present | 10 | equals the Secret |
+| Run 3, same file again | 3, no change | present | 10 | equals the Secret |
+
+- The Job reaches the admin API on the in-cluster URL `http://keycloak-http.keycloak.svc.cluster.local` although the hostname is the external one; each run took 2 to 5 seconds of import.
+- It runs as UID 1001, non-root, with a read-only root filesystem and only `/tmp` writable, inside a 512 Mi limit.
+- Lesson from a false failure on the way: Keycloak creates its bootstrap admin once, in the database. Replacing the `keycloak-admin` Secret afterwards does not change the admin's password, so the Job would fail with "Invalid user credentials" while waiting for Keycloak. Rotate the admin password in Keycloak and the Secret together.
+
 ## Script token (T051, T115)
 
 **Decision: scripts log in through the BFF's login form**, as one dedicated `sv-dev` verify seller, like a browser would. No direct-access-grants client is created. The verify seller's password is generated into `secrets.auto.tfvars` and reaches `sv-dev` as a Terraform Secret, and the seed job creates users through a `sv-dev` client limited to user management (both declared through T120). Recorded because it keeps Keycloak's client settings unchanged and exercises the real sign-in path, at the cost of a little more scripting (cookies and form fields).
