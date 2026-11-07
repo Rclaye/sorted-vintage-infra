@@ -165,6 +165,14 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 - **Cost**: $0. Admission and background controllers only (cleanup and reports controllers off, background scans off), within the plan's 0.4 GB.
 - **Alternatives considered**: `ClusterPolicy` (deprecated, see above); native `ValidatingAdmissionPolicy` alone (no CLI test harness for the CI half of FR-027).
 
+## R21. Listings framework version: Spring Boot 4
+
+- **Decision**: Spring Boot 4 (4.1.x, the Spring Initializr default in November 2026) on Java 21 and Gradle for the Listings service (T035), not Spring Boot 3 as first planned. Decided by Richard on 2026-11-06.
+- **Rationale**: Spring Boot 3's open-source support has ended, so a new service on it would start out of support. The Sprint 2 JVM spike was already built on Boot 4.1.2 with the OpenTelemetry Java agent 2.33.1 and fitted the plan's memory budget (241 MiB after load under a 512 Mi limit), so nothing measured changes.
+- **What it means for T035**: Spring Framework 7 and Jakarta EE 11; Jackson 3 is the default JSON library; Boot 4 splits starters into smaller modules, so the web starter is `spring-boot-starter-webmvc`. Write the service against Boot 4 from the start; do not copy Boot 3 examples unchanged.
+- **Cost**: $0.
+- **Alternatives considered**: Spring Boot 3.5 (support ended; would need an upgrade within the project's life).
+
 ---
 
 ## Plan changes from this research
@@ -183,6 +191,7 @@ Phase 0 of `/speckit-plan`. The Technical Context has no open NEEDS CLARIFICATIO
 | R19 | Object storage is Garage per environment on `/var/lab-data/garage-<env>`; MinIO's community edition is archived |
 | R20 | Kyverno policies are `ValidatingPolicy` (CEL); the legacy `ClusterPolicy` type is removed in Kyverno 1.20 |
 | R16 | Keycloak's database is its own CloudNativePG `Cluster` in the `keycloak` namespace, archived to the prod Garage and restored in the drill; memory row updated |
+| R21 | Listings is Spring Boot 4 on Java 21, not Spring Boot 3 |
 
 ## Tasks
 
