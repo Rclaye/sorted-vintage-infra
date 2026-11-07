@@ -84,3 +84,16 @@ Results of the spikes in Ticket 2.1, run on 2026-11-05 on the Mac mini as `bot` 
 ## Script token (T051, T115)
 
 **Decision: scripts log in through the BFF's login form**, as one dedicated `sv-dev` verify seller, like a browser would. No direct-access-grants client is created. The verify seller's password is generated into `secrets.auto.tfvars` and reaches `sv-dev` as a Terraform Secret, and the seed job creates users through a `sv-dev` client limited to user management (both declared through T120). Recorded because it keeps Keycloak's client settings unchanged and exercises the real sign-in path, at the cost of a little more scripting (cookies and form fields).
+
+**Third run, 2026-11-06: the `sv-dev` seed client, pass.** Same lab-like Keycloak on `sv-spike`, realm loaded from today's `sv-dev.json`, a user created first; then the Job applied `sv-dev.json` with a `seed` client (confidential, service account only, secret `${SV_DEV_SEED_SECRET}`) and its service-account user holding `realm-management` `view-users` and `manage-users`.
+
+| Check | Result |
+| --- | --- |
+| `seed` client created, other 10 clients unchanged | yes |
+| Its secret equals `SV_DEV_SEED_SECRET` in `keycloak-realm-clients` | yes |
+| Effective roles | `manage-users`, `view-users`, `query-users`, `query-groups` |
+| Its own token: create a user in `sv-dev` | 201 |
+| Its own token: list `sv-dev` clients / read `sv-prod` users | 403 / 403 |
+| Existing user kept through every run; same file again changes nothing | yes |
+
+- Terraform must create `SV_DEV_SEED_SECRET` before the realm file refers to it, so the infra change is applied first.

@@ -216,12 +216,15 @@ resource "kubernetes_secret_v1" "keycloak_realm_clients" {
     namespace = kubernetes_namespace_v1.keycloak.metadata[0].name
   }
 
-  data = merge([
-    for env in ["dev", "prod"] : {
-      for c in ["bff", "orders", "payments", "listings"] :
-      "SV_${upper(env)}_${upper(c)}_SECRET" => var.keycloak.clients[env][c]
-    }
-  ]...)
+  data = merge(
+    merge([
+      for env in ["dev", "prod"] : {
+        for c in ["bff", "orders", "payments", "listings"] :
+        "SV_${upper(env)}_${upper(c)}_SECRET" => var.keycloak.clients[env][c]
+      }
+    ]...),
+    { SV_DEV_SEED_SECRET = random_password.keycloak_dev_seed.result },
+  )
 }
 
 # The same client secrets where each environment's services read them.
@@ -233,5 +236,37 @@ resource "kubernetes_secret_v1" "keycloak_clients" {
     namespace = kubernetes_namespace_v1.env[each.key].metadata[0].name
   }
 
-  data = { for c in ["bff", "orders", "payments", "listings"] : c => var.keycloak.clients[each.key][c] }
+  data = merge(
+    { for c in ["bff", "orders", "payments", "listings"] : c => var.keycloak.clients[each.key][c] },
+    each.key == "dev" ? { seed = random_password.keycloak_dev_seed.result } : {},
+  )
+}
+
+# sv-dev only (T120, Sprint 2 spikes "Script token"): the seed client, a service account that may
+# only manage users, through which the seed job (T051) creates the demo sellers and the verify
+# seller. Generated here like Grafana's admin password, so secrets.auto.tfvars does not change.
+resource "random_password" "keycloak_dev_seed" {
+  length  = 32
+  special = false
+}
+
+# The one sv-dev user that verify_sprint2.sh (T115) signs in as, through the BFF login form like a
+# browser. The seed job creates the user with this password; the user is never in a realm file.
+resource "random_password" "dev_verify_seller" {
+  length  = 32
+  special = false
+}
+
+resource "kubernetes_secret_v1" "dev_verify_seller" {
+  metadata {
+    name      = "verify-seller"
+    namespace = kubernetes_namespace_v1.env["dev"].metadata[0].name
+  }
+
+  type = "kubernetes.io/basic-auth"
+
+  data = {
+    username = "verify-seller@sortedvtg.lan"
+    password = random_password.dev_verify_seller.result
+  }
 }
