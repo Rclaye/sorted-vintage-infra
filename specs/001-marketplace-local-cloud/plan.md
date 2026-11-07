@@ -9,8 +9,8 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 
 ## Technical Context
 
-**Language/Version**: Python 3.12 (FastAPI services, BFF, traffic generator); Java 21 (Spring Boot 3 Listings service); HCL (Terraform 1.9+)
-**Primary Dependencies**: FastAPI, SQLAlchemy 2, Jinja2 + HTMX (BFF pages), Spring Boot 3 (Web, Data JPA), Stripe SDK, OpenTelemetry SDKs and auto-instrumentation, Keycloak (OIDC), RabbitMQ client (aio-pika), Locust (traffic)
+**Language/Version**: Python 3.12 (FastAPI services, BFF, traffic generator); Java 21 (Spring Boot 4 Listings service, research R21); HCL (Terraform 1.9+)
+**Primary Dependencies**: FastAPI, SQLAlchemy 2, Jinja2 + HTMX (BFF pages), Spring Boot 4 (Web MVC, Data JPA), Stripe SDK, OpenTelemetry SDKs and auto-instrumentation, Keycloak (OIDC), RabbitMQ client (aio-pika), Locust (traffic)
 **Storage**: PostgreSQL via the CloudNativePG operator, one cluster per environment with a database per service, plus one cluster for Keycloak (research R16), backups to Garage; Garage for photos (S3 API, research R19); RabbitMQ for events
 **Testing**: pytest + httpx, JUnit 5 + Testcontainers, contract tests on service APIs, k6 or Locust for SC-002 and SC-003, `verify_sprintN.sh` per sprint
 **Target Platform**: single-node Kind on Docker Desktop on a Mac mini M4, linux/arm64 images; ingress bound to the mini's loopback and reached over an SSH tunnel from the MacBook Air until Tailscale is installed (research R1, R2)

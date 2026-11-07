@@ -25,7 +25,7 @@ Decisions carried in
 
 | Added | Where | Memory budget (plan) |
 | --- | --- | --- |
-| Listings (Spring Boot 3, Java 21), one replica per environment | `sv-dev`, `sv-prod`, databases `listings` on the existing `pg` clusters, photos in each Garage bucket `photos` | 0.4 GB each |
+| Listings (Spring Boot 4, Java 21), one replica per environment | `sv-dev`, `sv-prod`, databases `listings` on the existing `pg` clusters, photos in each Garage bucket `photos` | 0.4 GB each |
 | Payments (FastAPI), one replica per environment | `sv-dev`, `sv-prod`, database `payments` | 0.15 GB each |
 | Stripe forwarder, two `stripe listen` containers | `sv-dev`, `sv-prod` | part of 0.4 GB with ingress |
 | BFF Ingress for `dev.sortedvtg.lan` and `prod.sortedvtg.lan` | Traefik | none |
@@ -76,7 +76,7 @@ Repos: app (`services/listings`), gitops (`services/listings`)
 Story: As a seller, I need a service that stores my listings and photos durably, so that what I publish survives restarts and rebuilds.
 
 Implementation Requirements:
-- T035 `services/listings/`: Spring Boot 3, Java 21, Gradle; resource server for Keycloak JWTs with audience `listings`; `/healthz` and `/metrics`; OpenTelemetry Java agent to the collector; JSON logs with the fields in `contracts/README.md`; non-root `Dockerfile`; the heap flags from Ticket 2.1.
+- T035 `services/listings/`: Spring Boot 4 (research R21), Java 21, Gradle; resource server for Keycloak JWTs with audience `listings`; `/healthz` and `/metrics`; OpenTelemetry Java agent to the collector; JSON logs with the fields in `contracts/README.md`; non-root `Dockerfile`; the heap flags from Ticket 2.1.
 - T036 Flyway `V1__listings.sql`: Seller profile, Listing (with the generated `search_vector` and its GIN index) and Photo, with the limits and enums in tasks.md.
 - T050 (listings part) `gitops/services/listings/{base,overlays/dev,overlays/prod}`: credentials from `pg-listings-app`, S3 settings from `s3-photos`, the Keycloak issuer and JWKS URL per environment, requests and limits that pass Kyverno.
 

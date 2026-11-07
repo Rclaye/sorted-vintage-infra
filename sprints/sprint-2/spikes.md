@@ -27,7 +27,7 @@ Results of the spikes in Ticket 2.1, run on 2026-11-05 on the Mac mini as `bot` 
 
 - **Decision for T035:** variant A, the default collector with `-XX:MaxRAMPercentage=75`, a memory limit of 512 Mi and a request of about 320 Mi. The real Listings service adds JPA, Flyway and security, so expect 350–400 MiB, inside the 0.4 GB budget; measure again once it exists (T119).
 - The pod passed the Kyverno rules for non-root, requests and limits and host paths. It failed `restrict-image-registry` only, as it should for a locally built image.
-- **Open decision:** Spring Initializr's default is now **Spring Boot 4.1.2**, not 3 as plan.md and T035 say. Recommendation: Boot 4, since Boot 3's free support has ended. Confirm before T035.
+- **Decided 2026-11-06: Spring Boot 4** (research R21). This spike was already built on Boot 4.1.2, the Spring Initializr default, so the numbers above apply as they stand.
 - The lab used 6.6 of 11.9 GiB during the spike, so the extra cluster fitted.
 
 ## Browser-free Stripe onboarding (T043, T051, T115)
