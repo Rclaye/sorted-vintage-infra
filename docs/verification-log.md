@@ -8,7 +8,11 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 
 ## Open checks
 
-None. The three checks that were never run (two from 0.2, one from 1.4) were run on 2026-11-05; see their rows below.
+| Ticket | Check | Why open | When |
+| --- | --- | --- | --- |
+| 2.1 | A registration email from the live `sv-dev` realm reaches Mailpit | Needs one real sign-up, which needs the BFF login | With T047 (Ticket 2.6) |
+
+The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 1.4) were run on 2026-11-05; see their rows below.
 
 ## Sprint 0
 
@@ -93,3 +97,28 @@ None. The three checks that were never run (two from 0.2, one from 1.4) were run
 | --- | --- | --- | --- | --- |
 | `verify_sprint1.sh` passes | From the Air, and on the mini as the Jenkins `verify` stage | Pass | 2026-11-05 | infra #23; builds #4–#6 |
 | The retro records measured memory by component next to the plan | Prometheus working sets now and over 24 h | Pass: 6.16 GiB of pods against the plan's 9.5 GB | 2026-11-05 | Sprint 1 retro |
+
+## Sprint 2
+
+### Ticket 2.1: retire the sprint's risks first
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| `spikes.md` records the redirect result, the JVM memory and flags, the token decision, browser-free onboarding, the keycloak-config-cli result and the Keycloak check | Each spike run and written up | Pass, except the registration email to Mailpit (Open, above) | 2026-11-05 | infra #31, `sprints/sprint-2/spikes.md` |
+| No change to the lab cluster beyond reads; spikes run on `sv-spike`, deleted afterwards | Spikes on `sv-spike` only; live Keycloak read with kcadm; `kind get clusters` afterwards | Pass: only `sorted-vintage` left | 2026-11-06 | `spikes.md` |
+
+### Ticket 2.2: Java in CI, the BFF Ingress and Keycloak from Git
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| A PR adding a Gradle service shows build, Trivy and the SonarQube Cloud quality gate; after merge its dev tag reaches gitops with no manual step | The Listings PRs, the first Gradle service | Pass: build, image start check, Trivy and quality gate green on app #7; the dev tag PRs (gitops #28, #29) opened and auto-merged | 2026-11-07 | app #5, #6, #7; gitops #28, #29 |
+| `https://dev.sortedvtg.lan:8443/healthz` answers 200 from the Air's browser through the tunnel | Richard in the Air's browser; also curl through the tunnel with the mkcert CA, dev and prod | Pass: `{"status":"ok"}`; certificate `*.sortedvtg.lan` verified | 2026-11-06 | gitops #22 |
+| `infra-terraform` stays green with `sprints/sprint-2/` present and no `verify_sprint2.sh` | Jenkins builds after the Sprint 2 folder landed | Pass: `verify` chose `verify_sprint1.sh` and passed | 2026-11-07 | Jenkins builds on `f884254` and `5e65fc0` |
+| A client setting changed in a realm file reaches the live `sv-dev` realm after one sync, with no admin-console edit | Added the `seed` client to `sv-dev.json`; Argo CD synced `keycloak`, the PostSync Job ran; checked with kcadm | Pass: `seed` present with only `view-users` and `manage-users`, secret equal to the Terraform value, `sv-prod` and other clients unchanged; Job took 28 s | 2026-11-07 | gitops #24 (Job: #22; secrets: infra #33); spike runs 2 and 3 in `spikes.md` |
+
+### Ticket 2.3: Listings service and its data
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| `listings-dev` and `listings-prod` are Synced and Healthy; `/healthz` answers in both namespaces; Flyway reports V1 applied | Argo CD status; `/healthz` through the API server proxy; `flyway_schema_history` in each `listings` database | Pass: 1 pod each, 0 restarts; `{"status":"UP"}`; `1 listings true` in dev and prod | 2026-11-07 | gitops #26, #29, #31, #32 |
+| Its metrics appear in Prometheus and a request's trace in Tempo | Prometheus `up` and `jvm_memory_used_bytes` for the `listings` Service; Tempo search `service.name=listings` | Pass (dev): target up, JVM metrics present; traces found | 2026-11-07 | gitops #33 (Tempo fixed first) |
