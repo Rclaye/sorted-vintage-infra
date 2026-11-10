@@ -2,9 +2,10 @@
 
 <!--
 Sync Impact Report
-- Version: 1.1.0 → 1.2.0 (MINOR: a constraint changed and Principle II's mechanism restated; no principle removed or redefined; ADR-0008)
+- Version: 1.2.0 → 1.2.1 (PATCH: wording only; machines are named by role and capacity, not by model; ADR-0009)
+- Previous: 1.1.0 → 1.2.0 (MINOR: a constraint changed and Principle II's mechanism restated; no principle removed or redefined; ADR-0008)
 - Modified: II. Rebuildable From Code (one command, `make rebuild`, instead of one `terraform apply`; the two Terraform roots stay)
-- Modified constraints: Hardware budget (two machines; the Intel MacBook Pro leaves the lab; the Air hosts the Jenkins controller and the mini its build agent); CI split (SonarQube Cloud replaces self-hosted SonarQube)
+- Modified constraints: Hardware budget (two machines; the third machine leaves the lab; the workstation hosts the Jenkins controller and the lab host its build agent); CI split (SonarQube Cloud replaces self-hosted SonarQube)
 - Previous: 1.0.0 → 1.1.0 (MINOR: Principle III expanded, Principle VIII added, no imperative webhooks that change cluster state); 0.0.0 → 1.0.0 initial ratification (Principles I–VII)
 - Templates requiring updates: plan-template.md (Constitution Check gates) ✅ aligned, tasks-template.md ✅ aligned
 - Dependent documents updated: specs/001-marketplace-local-cloud/spec.md (User Story 3), plan.md (Constitution Check), tasks.md (T106), research.md (R15), docs/adr/0001
@@ -57,7 +58,7 @@ Terraform creates only what must exist before Kubernetes: the cluster and the Ar
 ## Additional Constraints
 
 - **Cost:** $0 recurring. Free tiers and local tools only.
-- **Hardware budget:** two machines. Mac mini M4 16 GB is the cluster host and the Jenkins build agent, with at most 12 GB allotted to containers. MacBook Air M4 16 GB runs local models and the Jenkins controller, as its own standard account.
+- **Hardware budget:** two machines. The lab host (16 GB, arm64) is the cluster host and the Jenkins build agent, with at most 12 GB allotted to containers. The workstation (16 GB) runs local models and the Jenkins controller, as its own standard account.
 - **Architecture:** all runtime images are linux/arm64.
 - **Languages:** Python (FastAPI) and Java (Spring Boot) for services; Python for AIOps components; HCL for infrastructure.
 - **CI split:** GitHub Actions builds and publishes application images and runs code analysis on SonarQube Cloud's free plan; Jenkins runs infrastructure lifecycle pipelines.
@@ -74,4 +75,4 @@ Terraform creates only what must exist before Kubernetes: the cluster and the Ar
 
 This constitution supersedes conflicting practices in any spec, plan or task list. A plan's Constitution Check MUST pass, or any violation MUST be justified in its Complexity Tracking table. Amendments require an ADR, an updated Sync Impact Report and a version bump: MAJOR for removing or redefining a principle, MINOR for adding one, PATCH for wording.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-30
+**Version**: 1.2.1 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-11-09

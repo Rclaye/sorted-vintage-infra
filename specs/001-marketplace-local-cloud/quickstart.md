@@ -2,25 +2,25 @@
 
 **Feature**: [spec.md](./spec.md) · **Plan**: [plan.md](./plan.md)
 
-This guide proves the feature works, from an empty Mac mini to a traced purchase. It is also the script for the Gate 1 rebuild drill. Commands describe the intended interface. The Makefile targets and scripts are built in Sprints 1 to 3 (see [tasks.md](./tasks.md)), and each sprint's `verify_sprintN.sh` automates the checks that apply so far.
+This guide proves the feature works, from an empty lab host to a traced purchase. It is also the script for the Gate 1 rebuild drill. Commands describe the intended interface. The Makefile targets and scripts are built in Sprints 1 to 3 (see [tasks.md](./tasks.md)), and each sprint's `verify_sprintN.sh` automates the checks that apply so far.
 
 ## Prerequisites
 
-- Mac mini with Docker Desktop (memory set to 12 GB) and the [Brewfile](../../scripts/Brewfile) tools, plus `mkcert` and `stripe`.
-- Clones of `sorted-vintage-infra`, `sorted-vintage-app` and `sorted-vintage-gitops` on the mini.
+- lab host with Docker Desktop (memory set to 12 GB) and the [Brewfile](../../scripts/Brewfile) tools, plus `mkcert` and `stripe`.
+- Clones of `sorted-vintage-infra`, `sorted-vintage-app` and `sorted-vintage-gitops` on the lab host.
 - Two Stripe test-mode sandboxes, one for dev and one for prod, with Connect enabled ([research R3](./research.md#r3-stripe-one-sandbox-per-environment)).
 - `infra/terraform/bootstrap/secrets.auto.tfvars` (git-ignored) holding both sandboxes' test keys, database passwords and the mkcert certificate.
-- On the MacBook Air: the mkcert root CA trusted, `/etc/hosts` mapping `dev.sortedvtg.lan`, `prod.sortedvtg.lan`, `grafana.sortedvtg.lan`, `argocd.sortedvtg.lan` and `mail.sortedvtg.lan` to `127.0.0.1`, and the tunnel open:
+- On the workstation: the mkcert root CA trusted, `/etc/hosts` mapping `dev.sortedvtg.lan`, `prod.sortedvtg.lan`, `grafana.sortedvtg.lan`, `argocd.sortedvtg.lan` and `mail.sortedvtg.lan` to `127.0.0.1`, and the tunnel open:
 
 ```bash
-ssh -N -L 8443:127.0.0.1:443 mac-mini
+ssh -N -L 8443:127.0.0.1:443 lab
 ```
 
 Browser URLs below use `https://<host>:8443`.
 
 ## 1. Rebuild from nothing (User Story 3, SC-004)
 
-On the mini, from `sorted-vintage-infra`:
+On the lab host, from `sorted-vintage-infra`:
 
 ```bash
 make rebuild
@@ -110,7 +110,7 @@ make down
 make up
 ```
 
-**Expected**: `make down` confirms each database's WAL archive is less than 2 minutes old, writes nothing to the cluster, and then stops the node. With the mini powered on, `make up` returns every app to `Healthy` in under 10 minutes. The orders from step 3 and the previous session's dashboard history are still there. A payment completed while the lab was down is applied by Payments reconciliation within 5 minutes of start ([research R5](./research.md#r5-events-missed-while-the-lab-is-off)).
+**Expected**: `make down` confirms each database's WAL archive is less than 2 minutes old, writes nothing to the cluster, and then stops the node. With the lab host powered on, `make up` returns every app to `Healthy` in under 10 minutes. The orders from step 3 and the previous session's dashboard history are still there. A payment completed while the lab was down is applied by Payments reconciliation within 5 minutes of start ([research R5](./research.md#r5-events-missed-while-the-lab-is-off)).
 
 ## 11. Restore during the drill (FR-023)
 

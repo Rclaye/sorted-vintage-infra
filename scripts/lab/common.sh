@@ -11,11 +11,11 @@ log() { printf '%s  %s\n' "$(date +%H:%M:%S)" "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 require_lab_user() {
-  [ "$(id -un)" = "$LAB_USER" ] || die "run this as '$LAB_USER' on the mini (ADR-0008), not as '$(id -un)'"
+  [ "$(id -un)" = "$LAB_USER" ] || die "run this as '$LAB_USER' on the lab host (ADR-0008), not as '$(id -un)'"
 }
 
 require_docker() {
-  docker info >/dev/null 2>&1 || die "Docker does not answer. Log in as $LAB_USER at the mini's screen so Docker Desktop runs, then retry."
+  docker info >/dev/null 2>&1 || die "Docker does not answer. Log in as $LAB_USER at the lab host's screen so Docker Desktop runs, then retry."
 }
 
 node_running() {

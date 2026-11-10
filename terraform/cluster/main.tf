@@ -1,8 +1,8 @@
 # Root 1 of 2: the Kind cluster. Applied before terraform/bootstrap (make rebuild).
-# Run on the Mac mini as bot. State stays local and git-ignored.
+# Run on the lab host as bot. State stays local and git-ignored.
 
 terraform {
-  required_version = ">= 1.11, < 2.0" # applied with 1.17 on the mini and in CI; the Air only validates
+  required_version = ">= 1.11, < 2.0" # applied with 1.17 on the lab host and in CI; the workstation only validates
 
   # State lives outside any clone, in bot's private ~/sv-terraform (mode 700), so make rebuild and
   # the Jenkins pipeline share it. The path is given at init:

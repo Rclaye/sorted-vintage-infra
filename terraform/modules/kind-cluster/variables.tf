@@ -10,13 +10,13 @@ variable "node_image" {
 }
 
 variable "ingress_listen_address" {
-  description = "Host address for ports 80 and 443. Loopback until Tailscale exists, then the mini's Tailscale IP (research R2)."
+  description = "Host address for ports 80 and 443. Loopback until Tailscale exists, then the lab host's Tailscale IP (research R2)."
   type        = string
   default     = "127.0.0.1"
 
   validation {
     condition     = var.ingress_listen_address != "0.0.0.0"
-    error_message = "Binding ingress to 0.0.0.0 exposes the lab on the home network (Principle VI)."
+    error_message = "Binding ingress to 0.0.0.0 exposes the lab on the local network (Principle VI)."
   }
 }
 

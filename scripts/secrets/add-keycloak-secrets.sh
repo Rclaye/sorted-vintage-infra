@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Adds Keycloak's secrets to ~/sv-terraform/secrets.auto.tfvars on the Mac mini, as bot (T025, R16).
+# Adds Keycloak's secrets to ~/sv-terraform/secrets.auto.tfvars on the lab host, as bot (T025, R16).
 # Generates the bootstrap admin password, the keycloak-db password, and one client secret per client and
 # realm (bff, orders, payments, listings in sv-dev and sv-prod). Asks for nothing, prints no values, and
 # does nothing if a keycloak block exists.
-# From the Air (quoted, so ~ is bot's home on the mini, not yours on the Air):
-#   ssh mac-mini-lab '~/Sorted-Vintage/src/sorted-vintage-infra/scripts/secrets/add-keycloak-secrets.sh'
+# From the workstation (quoted, so ~ is bot's home on the lab host, not yours on the workstation):
+#   ssh lab '~/Sorted-Vintage/src/sorted-vintage-infra/scripts/secrets/add-keycloak-secrets.sh'
 set -euo pipefail
 umask 077
 
@@ -12,7 +12,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${SV_TF_DIR:-$HOME/sv-terraform}/secrets.auto.tfvars"
 mkdir -p "$(dirname "$OUT")" && chmod 700 "$(dirname "$OUT")"
 
-[[ "$(id -un)" == "${SV_LAB_USER:-bot}" ]] || { echo "Run this as ${SV_LAB_USER:-bot} on the mini, not as $(id -un)."; exit 1; }
+[[ "$(id -un)" == "${SV_LAB_USER:-bot}" ]] || { echo "Run this as ${SV_LAB_USER:-bot} on the lab host, not as $(id -un)."; exit 1; }
 [[ -f "$OUT" ]] || { echo "$OUT does not exist; run scripts/secrets/new-secrets-tfvars.sh first."; exit 1; }
 if grep -q '^keycloak = {' "$OUT"; then
   echo "$OUT already has a keycloak block; leaving it unchanged."

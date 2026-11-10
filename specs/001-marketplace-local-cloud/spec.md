@@ -14,7 +14,7 @@
 - Q: Frontend approach? → A: Server-rendered pages from the BFF (Jinja templates with HTMX). Recorded here as a plan input.
 - Q: How are dev and prod separated? → A: Two namespaces in one Kind cluster, each with its own data stores. Recorded here as a plan input.
 - Q: How should new services and environments be added? → A: Environments are generated from the GitOps repo's folder layout; a new service starts from a template and needs one pull request.
-- Q: Does the lab run continuously? → A: No. It runs in working sessions; the Mac mini is on while I work and off otherwise. Telemetry and data must survive between sessions.
+- Q: Does the lab run continuously? → A: No. It runs in working sessions; the lab host is on while I work and off otherwise. Telemetry and data must survive between sessions.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -60,7 +60,7 @@ The platform engineer destroys the lab environment and rebuilds it, with the mar
 
 **Why this priority**: Principle II; it is also the first case-study metric.
 
-**Independent Test**: on the Mac mini, destroy everything, run the one documented command (`make rebuild`), and time how long it takes until every application reports healthy and a purchase succeeds.
+**Independent Test**: on the lab host, destroy everything, run the one documented command (`make rebuild`), and time how long it takes until every application reports healthy and a purchase succeeds.
 
 **Acceptance Scenarios**:
 
@@ -206,13 +206,13 @@ The platform engineer creates a new service from the service template, opens one
 - **SC-001**: A seller who has completed payout onboarding publishes a listing with photos in under 2 minutes; onboarding itself takes under 5 minutes with Stripe test data.
 - **SC-002**: With the traffic generator at its baseline rate, 95% of checkouts complete in under 2 seconds, excluding time spent on the payment page.
 - **SC-003**: In a test of 1,000 simultaneous purchase attempts across 100 items, zero items are sold twice.
-- **SC-004**: An empty Mac mini reaches a working purchase in under 30 minutes from one command.
+- **SC-004**: An empty lab host reaches a working purchase in under 30 minutes from one command.
 - **SC-005**: 100% of sampled purchases have one trace that covers every service involved.
 - **SC-006**: Over the project, zero changes reach prod outside an approved pull request, as checked by drift detection.
 - **SC-007**: With notifications stopped for 30 minutes, every sale completes, and every queued email is delivered within 5 minutes of recovery.
 - **SC-009**: A new service goes from template to healthy in dev in under 30 minutes, with one pull request and no platform change.
 - **SC-010**: 100% of test manifests that break policy are rejected both in CI and at admission.
-- **SC-008**: From a powered-on mini, the start command brings the platform to healthy in under 10 minutes, with the previous session's orders and dashboards still present.
+- **SC-008**: From a powered-on lab host, the start command brings the platform to healthy in under 10 minutes, with the previous session's orders and dashboards still present.
 
 ## Assumptions
 

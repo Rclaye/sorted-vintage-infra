@@ -6,25 +6,25 @@ Source: specs/001-marketplace-local-cloud/tasks.md, Phases 1–2, T080 and T103�
 
 1. Executive Summary & Sprint 1 Objective
 
-Sprint 1 builds the platform every user story runs on. Terraform creates a single-node Kind cluster on the Mac mini and installs Argo CD. From then on, Argo CD installs everything else from `sorted-vintage-gitops`: ingress (Traefik), observability, Postgres with continuous backups, RabbitMQ, Garage, Mailpit, Keycloak and Kyverno. A Copier template produces services that meet the constitution from their first commit, and a stub BFF generated from it travels the full delivery path: GitHub Actions build, a tag commit to Git, Argo CD sync in dev, and a gated promotion to prod. Jenkins runs on the MacBook Air, bound to loopback, with its build agent on the mini, and SonarQube Cloud checks code quality on every pull request. The sprint ends with `make up` and `make down` for working sessions, and a measured memory budget.
+Sprint 1 builds the platform every user story runs on. Terraform creates a single-node Kind cluster on the lab host and installs Argo CD. From then on, Argo CD installs everything else from `sorted-vintage-gitops`: ingress (Traefik), observability, Postgres with continuous backups, RabbitMQ, Garage, Mailpit, Keycloak and Kyverno. A Copier template produces services that meet the constitution from their first commit, and a stub BFF generated from it travels the full delivery path: GitHub Actions build, a tag commit to Git, Argo CD sync in dev, and a gated promotion to prod. Jenkins runs on the workstation, bound to loopback, with its build agent on the lab host, and SonarQube Cloud checks code quality on every pull request. The sprint ends with `make up` and `make down` for working sessions, and a measured memory budget.
 
 Sprint Objective
-One `make rebuild` on the mini ends with every Argo CD Application `Synced` and `Healthy`, Kyverno rejecting non-compliant workloads, and the stub BFF answering `https://dev.sortedvtg.lan:8443/healthz` from the MacBook Air through the SSH tunnel.
+One `make rebuild` on the lab host ends with every Argo CD Application `Synced` and `Healthy`, Kyverno rejecting non-compliant workloads, and the stub BFF answering `https://dev.sortedvtg.lan:8443/healthz` from the workstation through the SSH tunnel.
 
 Decisions carried in (accepted 2026-10-29, see plan.md Complexity Tracking)
 - Single-node Kind (research R1). The T008 spike confirms it survives stop and start before any Terraform is written.
-- No Tailscale yet (research R2). Ingress binds to the mini's loopback address; the Air reaches it with `ssh -N -L 8443:127.0.0.1:443 mac-mini-lab`.
+- No Tailscale yet (research R2). Ingress binds to the lab host's loopback address; the workstation reaches it with `ssh -N -L 8443:127.0.0.1:443 lab`.
 - Session-end backups write nothing to the cluster (research R14). WAL archiving runs continuously; `make down` only checks that it is current.
-- The lab is two machines (research R15). The Jenkins controller runs on the Air as its own standard account `ricomillz` (not the Air's everyday account), bound to `127.0.0.1:8080`, and builds only `main` of `sorted-vintage-infra`; the Intel MacBook Pro is no longer used. Code quality uses SonarQube Cloud's free plan.
-- The lab runs as the mini's standard account `bot` (ADR-0008): Docker Desktop, Kind, the infra clone, `secrets.auto.tfvars` and the Jenkins agent. `bot` stays logged in at the mini's screen during a session. The mini's admin `ricomillz` only installs Homebrew packages and changes system settings. From the Air, `ssh mac-mini-lab` is `bot` and `ssh mac-mini` is the admin.
+- The lab is two machines (research R15). The Jenkins controller runs on the workstation as its own standard account (not the workstation's everyday account), bound to `127.0.0.1:8080`, and builds only `main` of `sorted-vintage-infra`; the third machine is no longer used. Code quality uses SonarQube Cloud's free plan.
+- The lab runs as the lab host's standard account `bot` (ADR-0008): Docker Desktop, Kind, the infra clone, `secrets.auto.tfvars` and the Jenkins agent. `bot` stays logged in at the lab host's screen during a session. The lab host's admin account only installs Homebrew packages and changes system settings. From the workstation, `ssh lab` is `bot` and `ssh lab-admin` is the admin.
 
 2. Lab Topology After Sprint 1
 
    ┌───────────────────────────────────┐  ssh -N -L 8443:127.0.0.1:443   ┌──────────────────────────────────────────────────────────┐
-   │  MacBook Air M4 (16 GB)           ├────────────────────────────────►│  Mac mini M4 (16 GB), account bot, Docker Desktop (12 GB)│
+   │  Workstation (16 GB)              ├────────────────────────────────►│  Lab host (16 GB), account bot, Docker Desktop (12 GB)   │
    │  Browser → *.sortedvtg.lan:8443   │                                 │  Kind node "sorted-vintage" (80/443 on 127.0.0.1 only)   │
    │  /etc/hosts → 127.0.0.1           │  ssh (key sv_jenkins_agent)     │   argocd · traefik · cert-manager · kyverno              │
-   │  Jenkins (Air account ricomillz)  ├────────────────────────────────►│   prometheus · grafana · loki · tempo · otel-collector   │
+   │  Jenkins (own standard account)   ├────────────────────────────────►│   prometheus · grafana · loki · tempo · otel-collector   │
    │    127.0.0.1:8080, no executors   │  starts the agent               │   keycloak (realms sv-dev, sv-prod)                      │
    └──────┬──────────────────▲─────────┘                                 │   sv-dev / sv-prod: postgres · rabbitmq · garage ·        │
           │ git push         │ Jenkins polls main every 5 min            │                     mailpit · bff (stub)                 │
@@ -44,11 +44,11 @@ Owner: Platform Engineer
 Story: As the platform owner, I want the two riskiest assumptions tested on the real hardware first, so that a week of Terraform is not built on a cluster that cannot restart.
 
 Implementation Requirements:
-- T008 Kind restart spike on the mini: create a one-node cluster, run a pod with a PVC that writes a file, `docker stop` and `docker start` the node container, and confirm the API server, the pod and the file return. Record the commands and result in `sprints/sprint-1/spikes.md`. If it fails, stop and revisit research R1 before Ticket 1.2.
+- T008 Kind restart spike on the lab host: create a one-node cluster, run a pod with a PVC that writes a file, `docker stop` and `docker start` the node container, and confirm the API server, the pod and the file return. Record the commands and result in `sprints/sprint-1/spikes.md`. If it fails, stop and revisit research R1 before Ticket 1.2.
 - T009 Stripe spike: create sandboxes `sorted-vintage-dev` and `sorted-vintage-prod` with Connect enabled; run `stripe listen --forward-to … --forward-connect-to …` against a local echo server; trigger `payment_intent.succeeded` and `account.updated`; record whether both streams use the same signing secret. Done: one secret per sandbox, and connected accounts move to Accounts v2 (research R17, `spikes.md`).
 - T007 Pre-commit hooks: `terraform_fmt` and `terraform_validate` in infra; `ruff`, `ruff-format` and `hadolint` in app; `check-jsonschema` for Kubernetes YAML in gitops. Then `pre-commit autoupdate`, one pull request per repository. This also closes the Sprint 0 follow-up and is the first real test of the branch rules.
-- Add `mkcert`, `stripe/stripe-cli/stripe`, `kyverno` and `tfsec` to `scripts/Brewfile` and install them on the mini as the admin (`ssh mac-mini`), since Homebrew belongs to that account. On the Air, install only what it needs; its Terraform comes from homebrew-core, not the HashiCorp tap (Sprint 0 retro).
-- Clone `sorted-vintage-infra` on the mini as `bot` (`ssh mac-mini-lab`) into `~/Sorted-Vintage/src/`, and run the spikes there as `bot`.
+- Add `mkcert`, `stripe/stripe-cli/stripe`, `kyverno` and `tfsec` to `scripts/Brewfile` and install them on the lab host as the admin (`ssh lab-admin`), since Homebrew belongs to that account. On the workstation, install only what it needs; its Terraform comes from homebrew-core, not the HashiCorp tap (Sprint 0 retro).
+- Clone `sorted-vintage-infra` on the lab host as `bot` (`ssh lab`) into `~/Sorted-Vintage/src/`, and run the spikes there as `bot`.
 
 Acceptance Criteria Verification:
 - `spikes.md` records a passing Kind restart and the Stripe signing-secret answer.
@@ -64,7 +64,7 @@ Implementation Requirements:
 - T012 `terraform/modules/secrets/`: Kubernetes Secrets in `sv-dev` and `sv-prod` from the git-ignored `terraform/bootstrap/secrets.auto.tfvars`, holding each environment's Stripe keys and signing secret (from its own sandbox), database passwords, and the mkcert `*.sortedvtg.lan` certificate as a TLS Secret in `traefik`. Commit only `secrets.auto.tfvars.example`, with placeholders.
 
 Acceptance Criteria Verification:
-- `terraform apply` for `cluster` then `bootstrap` succeeds on the mini, and a second `terraform plan` for each shows no changes.
+- `terraform apply` for `cluster` then `bootstrap` succeeds on the lab host, and a second `terraform plan` for each shows no changes.
 - `docker port sorted-vintage-control-plane 443` shows `127.0.0.1:443` only.
 - `git ls-files` shows no `*.tfvars` other than the example.
 
@@ -128,32 +128,32 @@ Implementation Requirements:
     - `down`: read-only. Wait until each CloudNativePG `Cluster` reports continuous archiving as working and its last archived WAL is no older than 120 seconds, wait 60 more seconds, then stop the node container. It creates nothing in the cluster (research R14).
     - `rebuild`: `terraform apply` for `cluster` then `bootstrap`, then wait for health.
     - `destroy`: `terraform destroy` for `bootstrap` then `cluster`. The Garage data on `~/sv-data` is kept.
-- T015 `docs/runbooks/lab-session.md`: logging in as `bot` at the mini's screen, the SSH tunnel, the `/etc/hosts` entries on the Air (`dev`, `prod`, `grafana`, `argocd`, `mail`, `auth` under `sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`. Link it from `docs/runbooks/remote-access.md`.
+- T015 `docs/runbooks/lab-session.md`: logging in as `bot` at the lab host's screen, the SSH tunnel, the `/etc/hosts` entries on the workstation (`dev`, `prod`, `grafana`, `argocd`, `mail`, `auth` under `sortedvtg.lan` → `127.0.0.1`), trusting the mkcert root CA, and `make up` / `make down`. Link it from `docs/runbooks/remote-access.md`.
 
 Acceptance Criteria Verification:
 - `make down` then `make up` returns every app to `Healthy` in under 10 minutes, and the Grafana history from before the stop is still there.
 - `make down` makes no change to cluster state: after one run and `make up`, `kubectl get backups.postgresql.cnpg.io -A` lists only scheduled backups, and Argo CD shows no Application out of sync.
 
-Ticket 1.7 — Jenkins on the Air, and SonarQube Cloud (T104, T103, T014, T105, T106)
+Ticket 1.7 — Jenkins on the workstation, and SonarQube Cloud (T104, T103, T014, T105, T106)
 Owner: Platform / Security Engineer
-Story: As the platform owner, I want to see the infrastructure pipeline and code-quality results in a browser without a third machine or any port open on my home network, so that CI is visible and the lab stays simple and closed (Principles III and VI).
+Story: As the platform owner, I want to see the infrastructure pipeline and code-quality results in a browser without a third machine or any port open on my local network, so that CI is visible and the lab stays simple and closed (Principles III and VI).
 
 Implementation Requirements:
-- T104 Jenkins on the Air, following `docs/runbooks/jenkins.md`:
-    - On the Air, from your everyday account, first close your home folder to other accounts (`chmod 700 ~`, and `chmod 600` on any credential file that is group- or world-readable).
-    - Then run `scripts/jenkins/air-setup.sh` from that same everyday account; it asks for your password for the steps that act as the Air's `ricomillz` account. It refuses to continue if `ricomillz` is an admin. It installs `jenkins-lts`, and a LaunchDaemon that runs Jenkins as the Air's `ricomillz`, bound to `127.0.0.1:8080`, not started at boot. It creates the agent key `/Users/ricomillz/.ssh/sv_jenkins_agent` (owner-only), and copies the mini's host key from your verified `known_hosts`.
-    - From the Air, run the command the script prints. It runs `scripts/jenkins/authorize-agent-key.sh` on the mini as `bot` through `ssh mac-mini-lab`. The key is `restrict`ed: it can run the agent but gets no forwarding and no pty.
-    - Add `openjdk@21` to `scripts/Brewfile` for the mini's agent.
-- T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mini-agent-ssh` credential (read from the key file, never committed), the `mac-mini` agent (label `lab`, launched over SSH as the mini's `bot`, so no agent port is opened), zero executors on the controller, and the `infra-terraform` pipeline job polling the `main` branch of `sorted-vintage-infra` every 5 minutes (GitHub cannot reach Jenkins). It is a single-branch job: no multibranch project, and no pull request or fork discovery.
+- T104 Jenkins on the workstation, following `docs/runbooks/jenkins.md`:
+    - On the workstation, from your everyday account, first close your home folder to other accounts (`chmod 700 ~`, and `chmod 600` on any credential file that is group- or world-readable).
+    - Then run `scripts/jenkins/air-setup.sh` from that same everyday account; it asks for your password for the steps that act as the workstation's Jenkins account. It refuses to continue if that account is an admin. It installs `jenkins-lts`, and a LaunchDaemon that runs Jenkins as the workstation's Jenkins account, bound to `127.0.0.1:8080`, not started at boot. It creates the agent key `/Users/<jenkins-account>/.ssh/sv_jenkins_agent` (owner-only), and copies the lab host's host key from your verified `known_hosts`.
+    - From the workstation, run the command the script prints. It runs `scripts/jenkins/authorize-agent-key.sh` on the lab host as `bot` through `ssh lab`. The key is `restrict`ed: it can run the agent but gets no forwarding and no pty.
+    - Add `openjdk@21` to `scripts/Brewfile` for the lab host's agent.
+- T103 Jenkins as code: `jenkins/plugins.txt` and `jenkins/casc.yaml` define the `mini-agent-ssh` credential (read from the key file, never committed), the `lab-host` agent (label `lab`, launched over SSH as the lab host's `bot`, so no agent port is opened), zero executors on the controller, and the `infra-terraform` pipeline job polling the `main` branch of `sorted-vintage-infra` every 5 minutes (GitHub cannot reach Jenkins). It is a single-branch job: no multibranch project, and no pull request or fork discovery.
 - T014 `jenkins/Jenkinsfile` on agent `lab`: fmt, validate, tfsec, plan, manual approval, apply; destroy behind a second approval.
 - T105 SonarQube Cloud free plan: organization `rclaye` bound to GitHub, the SonarQube Cloud GitHub App on `sorted-vintage-app`, automatic analysis off, project `rclaye_sv-bff`, `sonar-project.properties` in the BFF and the template, and a `sonar` step in `build.yml` after tests. You create `SONAR_TOKEN` in SonarQube Cloud and add it as a repository secret yourself. If the scan action does not run on `ubuntu-24.04-arm`, run only the scan job on `ubuntu-24.04`.
-- T106 ADR-0008 (Jenkins on the Air; SonarQube Cloud instead of self-hosted; the lab drops to two machines; Principle II reads "one command, `make rebuild`") and a MINOR amendment to the constitution (1.1.0 → 1.2.0). Done before T104 and T103.
+- T106 ADR-0008 (Jenkins on the workstation; SonarQube Cloud instead of self-hosted; the lab drops to two machines; Principle II reads "one command, `make rebuild`") and a MINOR amendment to the constitution (1.1.0 → 1.2.0). Done before T104 and T103.
 
 Acceptance Criteria Verification:
-- On the Air, `sudo lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, owned by the Air's `ricomillz`, and `http://localhost:8080` shows Jenkins.
-- The Air's everyday account cannot read `/Users/ricomillz/.ssh/sv_jenkins_agent`, and the Air's `ricomillz` is not in the `admin` group.
+- On the workstation, `sudo lsof -nP -iTCP:8080 -sTCP:LISTEN` shows `127.0.0.1:8080` only, owned by the workstation's Jenkins account, and `http://localhost:8080` shows Jenkins.
+- The workstation's everyday account cannot read `/Users/<jenkins-account>/.ssh/sv_jenkins_agent`, and the workstation's Jenkins account is not in the `admin` group.
 - Jenkins has exactly one job, `infra-terraform`, and it builds `main` only.
-- The `mac-mini` agent is online in Jenkins and runs as the mini's `bot`, which is not in the `admin` group, and an `infra-terraform` run shows plan, a paused approval, and apply on it.
+- The `lab-host` agent is online in Jenkins and runs as the lab host's `bot`, which is not in the `admin` group, and an `infra-terraform` run shows plan, a paused approval, and apply on it.
 - A pull request to `sorted-vintage-app` shows the SonarQube Cloud quality gate.
 
 Ticket 1.8 — Verify and Measure (T031, T032)
@@ -161,7 +161,7 @@ Owner: Platform Engineer
 Story: As the platform owner, I want the sprint's claims checked by a script and the memory budget measured, so that Sprint 2 starts from facts rather than estimates.
 
 Implementation Requirements:
-- T031 `sprints/sprint-1/verify_sprint1.sh` (in this folder), run from the Air.
+- T031 `sprints/sprint-1/verify_sprint1.sh` (in this folder), run from the workstation.
 - T032 Measure real memory use with `docker stats` and `kubectl top` against the plan's estimate (about 9.5 GB of 12 GB) and record it in `sprints/sprint-1/sprint1_retro.md`. Above 11 GB, scale dev services to zero when idle before cutting anything else.
 
 Acceptance Criteria Verification:
@@ -170,7 +170,7 @@ Acceptance Criteria Verification:
 
 4. Sprint Verification
 
-Run `sprints/sprint-1/verify_sprint1.sh` from the MacBook Air with the lab up. It runs on the Air and over SSH on the mini and makes no change to the cluster. It checks the mini's toolchain, the single node and its loopback-only ingress binding, Jenkins on the Air bound to loopback, the Jenkins agent key reaching Java on the mini, the SonarQube Cloud check on the app repository, Argo CD health, the BFF in both environments, policy rejection with server-side dry runs, WAL archiving, an empty Terraform plan, the `prod` environment's required reviewer, and that no tfvars file is tracked. It exits non-zero on the first failure.
+Run `sprints/sprint-1/verify_sprint1.sh` from the workstation with the lab up. It runs on the workstation and over SSH on the lab host and makes no change to the cluster. It checks the lab host's toolchain, the single node and its loopback-only ingress binding, Jenkins on the workstation bound to loopback, the Jenkins agent key reaching Java on the lab host, the SonarQube Cloud check on the app repository, Argo CD health, the BFF in both environments, policy rejection with server-side dry runs, WAL archiving, an empty Terraform plan, the `prod` environment's required reviewer, and that no tfvars file is tracked. It exits non-zero on the first failure.
 
 5. Out of Scope for Sprint 1
 

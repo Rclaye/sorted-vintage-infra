@@ -7,11 +7,11 @@
 
 Earlier Clixx projects ran on AWS (EC2, ECS, kubeadm on EC2). Sorted Vintage needs a cluster that can run long working sessions over several months, keep its telemetry between sessions for the detection work, and be rebuilt cheaply. The program has a $0 recurring budget (constitution, Additional Constraints).
 
-Available hardware at the time: a Mac mini M4 with 16 GB, a MacBook Air M4 with 16 GB, and an Intel MacBook Pro with 8 GB. Since 2026-10-30 the lab is two machines, the mini and the Air; the Intel MacBook Pro left the lab (ADR-0008).
+Available hardware at the time: a 16 GB arm64 desktop (the lab host), a 16 GB laptop (the workstation), and an older 8 GB laptop. Since 2026-10-30 the lab is two machines, the lab host and the workstation; the third machine left the lab (ADR-0008).
 
 ## Decision
 
-Run a multi-node Kind cluster (one control plane, two workers) on the Mac mini under Docker Desktop, created by Terraform. OrbStack is a lighter alternative if memory gets tight. Dev and prod are namespaces in that one cluster. All images are linux/arm64.
+Run a multi-node Kind cluster (one control plane, two workers) on the lab host under Docker Desktop, created by Terraform. OrbStack is a lighter alternative if memory gets tight. Dev and prod are namespaces in that one cluster. All images are linux/arm64.
 
 ## Consequences
 

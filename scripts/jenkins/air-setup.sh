@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Run on the MacBook Air from your everyday (admin) account. Idempotent; asks for your password.
-# Installs the Jenkins controller bound to 127.0.0.1:8080 (nothing listens on the home network),
-# running as the Air's dedicated standard account (default ricomillz, not the mini's admin of the same name),
-# and creates the key that account uses to start the build agent on the Mac mini over SSH, as the mini's bot.
+# Run on the workstation from your everyday (admin) account. Idempotent; asks for your password.
+# Installs the Jenkins controller bound to 127.0.0.1:8080 (nothing listens on the local network),
+# running as the workstation's dedicated standard account (not the lab host's admin account),
+# and creates the key that account uses to start the build agent on the lab host over SSH, as the lab host's bot.
 # See docs/runbooks/jenkins.md and research R15.
-#   SV_JENKINS_USER  the Air's Jenkins account (default: ricomillz)
-#   SV_MINI_HOST     the mini's hostname as written in your known_hosts (default: ricomillzs-Mac-mini.local)
+# Set both in scripts/lab/local.env (git-ignored; copy scripts/lab/local.env.example), per ADR-0009:
+#   SV_JENKINS_USER  the workstation's Jenkins account
+#   SV_LAB_HOST      the lab host's hostname as written in your known_hosts
 set -euo pipefail
 
-JUSER="${SV_JENKINS_USER:-ricomillz}"
-MINI_HOST="${SV_MINI_HOST:-ricomillzs-Mac-mini.local}"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+if [[ -f "$REPO/scripts/lab/local.env" ]]; then set -a; . "$REPO/scripts/lab/local.env"; set +a; fi
+JUSER="${SV_JENKINS_USER:?set SV_JENKINS_USER in scripts/lab/local.env (see local.env.example)}"
+MINI_HOST="${SV_LAB_HOST:?set SV_LAB_HOST in scripts/lab/local.env (see local.env.example)}"
 LABEL=com.sortedvintage.jenkins
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
-REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 CASC="$REPO/jenkins/casc.yaml"
 PLUGINS="$REPO/jenkins/plugins.txt"
 # Jenkins Plugin Installation Manager, pinned and checksum-checked (T103).
@@ -101,6 +103,7 @@ cat >"$tmp" <<EOF
     <key>CASC_JENKINS_CONFIG</key><string>$JHOME/.jenkins/casc.yaml</string>
     <key>SV_AGENT_KEY_FILE</key><string>$KEY</string>
     <key>SV_ADMIN_PASSWORD_FILE</key><string>$ADMIN_PW</string>
+    <key>SV_LAB_HOST</key><string>$MINI_HOST</string>
   </dict>
   <key>RunAtLoad</key><false/>
   <key>KeepAlive</key><false/>
@@ -126,15 +129,15 @@ echo "  LaunchDaemon $LABEL runs Jenkins as $JUSER; it does not start at boot"
 
 echo "Agent key"
 sudo test -f "$KEY" || as_j ssh-keygen -q -t ed25519 -N "" -C "sv-jenkins-agent@$(hostname -s)" -f "$KEY"
-# Trust the mini's host key you already verified, rather than accepting one on first use.
+# Trust the lab host's host key you already verified, rather than accepting one on first use.
 if entry="$(ssh-keygen -F "$MINI_HOST" -f "$HOME/.ssh/known_hosts" | grep -v '^#')" && [[ -n "$entry" ]]; then
   if ! as_j ssh-keygen -F "$MINI_HOST" -f "$JHOME/.ssh/known_hosts" >/dev/null 2>&1; then
     printf '%s\n' "$entry" | as_j tee -a "$JHOME/.ssh/known_hosts" >/dev/null
     as_j chmod 600 "$JHOME/.ssh/known_hosts"
   fi
-  echo "  $JUSER trusts the mini's host key from your known_hosts"
+  echo "  $JUSER trusts the lab host's host key from your known_hosts"
 else
-  echo "  WARNING: $MINI_HOST is not in your known_hosts; run 'ssh mac-mini-lab true' once, then rerun this script."
+  echo "  WARNING: $MINI_HOST is not in your known_hosts; run 'ssh lab true' once, then rerun this script."
 fi
 
 echo
@@ -143,5 +146,5 @@ echo "  sudo launchctl kickstart system/$LABEL"
 echo "and open http://localhost:8080. Sign in as admin; this copies the password to your clipboard:"
 echo "  sudo cat $ADMIN_PW | pbcopy"
 echo
-echo "Next, from this account, authorize the agent key on the mini as bot (prints nothing secret):"
-echo "  ssh mac-mini-lab \"~/Sorted-Vintage/src/sorted-vintage-infra/scripts/jenkins/authorize-agent-key.sh '$(sudo cat "$KEY.pub")'\""
+echo "Next, from this account, authorize the agent key on the lab host as bot (prints nothing secret):"
+echo "  ssh lab \"~/Sorted-Vintage/src/sorted-vintage-infra/scripts/jenkins/authorize-agent-key.sh '$(sudo cat "$KEY.pub")'\""
