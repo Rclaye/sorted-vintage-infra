@@ -14,7 +14,7 @@
 - Paths are prefixed by repository: `infra/`, `app/`, `gitops/`. Paths under `specs/` are in `infra/`.
 - Field rules quoted in a task come from [data-model.md](./data-model.md); API shapes come from the named contract file.
 
-**Task IDs**: T103–T107 were added after generation and placed where they run. They are numbered after T102 so that existing references stay valid. T108–T114 come from convergence (Phase 11); T115–T120 were added when Sprint 2 was planned (2026-11-05) and sit at the end of Phase 3.
+**Task IDs**: T103–T107 were added after generation and placed where they run. They are numbered after T102 so that existing references stay valid. T108–T114 come from convergence (Phase 11); T115–T120 were added when Sprint 2 was planned (2026-11-05) and sit at the end of Phase 3. T121–T123 were added on 2026-11-09 after a portfolio review: T122 in Phase 6, T123 in Phase 7 and T121 in Phase 10.
 
 **Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 (US1) and T113, T115–T120 = Sprint 2 · Phase 4 (US2) through Phase 9 = Sprint 3 · Phase 10 = Gate 1 release. Re-scoped 2026-11-05: Sprint 2 is User Story 1 only, so a whole story is finished and verified before the next starts; US2 moves to Sprint 3 with the purchase checks of T075 ([sprint2.md](../../sprints/sprint-2/sprint2.md)).
 
@@ -191,6 +191,7 @@
 - [x] T080 [US4] Prod approval gate per ADR-0002 (pulled into Sprint 1): create the GitHub Environment `prod` on `sorted-vintage-gitops` with the owner as required reviewer, from `infra/scripts/protect-prod.sh`; add `gitops/.github/workflows/prod-gate.yml`, which on every pull request runs a `prod-gate` job that passes at once when no file under `services/*/overlays/prod/` changed and otherwise runs in environment `prod`, so it passes only after the reviewer approves; add `prod-gate` to the required checks of the `protect-main` ruleset on the GitOps repo. PR approvals stay at zero, because GitHub does not let an author approve their own pull request Done: gitops #15 (`prod-gate.yml`) and infra `scripts/protect-prod.sh` (environment `prod`, owner as reviewer; `policy` and `prod-gate` required on main; auto-merge for bot PRs); the promotion (#17) and its revert (#18) each merged only after the `prod` approval
 - [ ] T081 [US4] Demonstrate a blocked release: a branch with a base image carrying a known critical CVE fails Trivy in `build.yml` and publishes nothing; record evidence in `infra/sprints/sprint-3/evidence.md`
 - [ ] T082 [US4] Demonstrate rollback by `git revert` of a promotion commit; record the time until prod runs the previous version in `infra/sprints/sprint-3/evidence.md`
+- [ ] T122 [US4] Sign what is deployed: in `app/.github/workflows/build.yml`, after the push, sign each image by digest with cosign keyless signing (GitHub OIDC, `id-token: write`; no key to store) and attach an SPDX SBOM made by syft as a cosign attestation; add `gitops/policies/verify-image-signature.yaml`, a Kyverno `verifyImages` rule for `ghcr.io/rclaye/sv-*` in `sv-dev` and `sv-prod` that accepts only signatures from that workflow on `main`, with good and bad cases in `gitops/tests/policy/` where the Kyverno CLI can check them offline. Spike on `sv-spike` first (Kyverno must reach GHCR and the Sigstore services from the cluster). Roll out in `Audit`, switch to `Enforce` once every running service image is signed, and record an unsigned image being rejected at admission in `infra/sprints/sprint-3/evidence.md`; decision in ADR-0006 (T101), per Constitution III and VI
 
 ---
 
@@ -205,6 +206,7 @@
 - [ ] T085 [US5] Grafana data sources in `gitops/platform/kube-prometheus-stack/values.yaml`: Tempo with trace-to-logs on `trace_id` and search by `order_id`, Loki with a derived field linking `trace_id` to Tempo
 - [ ] T086 [US5] Change events in `gitops/platform/argocd-notifications/`: an `on-deployed` trigger that posts a Grafana annotation tagged `service`, `version`, `env` and writes the same fields as a JSON log line to Loki ([research R11](./research.md#r11-change-events-fr-021), FR-021)
 - [ ] T087 [P] [US5] Dashboards as code in `gitops/platform/kube-prometheus-stack/dashboards/`: one RED dashboard per service and one checkout-path dashboard, each showing deployment annotations
+- [ ] T123 [US5] Service level objectives as code: write `infra/docs/slo.md` with an availability and a latency SLI for browse (BFF and Listings) and for checkout (BFF, Orders, Payments), their targets and the error-budget window; the lab runs in sessions, so choose a window that survives the gaps and record the choice in research.md. Add the recording rules and multi-window burn-rate alerts (fast and slow burn) as `PrometheusRule` resources under `gitops/platform/observability/`, and an SLO row on the checkout-path dashboard (T087). With the traffic generator running (US6), inject one fault, and record how long the fast-burn alert takes to fire and to clear in `infra/sprints/sprint-3/evidence.md`. These alerts are the baseline that Project 2's detection is scored against (Constitution IV)
 
 ---
 
@@ -245,6 +247,7 @@
 - [ ] T100 Write `infra/sprints/sprint-3/verify_sprint3.sh` covering SC-001 to SC-010 where automatable
 - [ ] T101 [P] Write ADRs in `infra/docs/adr/`: 0003 (Stripe Connect through the CLI forwarder, one sandbox per environment), 0004 (namespaces, not clusters), 0005 (CloudNativePG with the Barman Cloud Plugin over Crossplane), 0006 (policy in CI and at admission), 0007 (single-node Kind, and the temporary SSH-only access until Tailscale)
 - [ ] T102 Write the Gate 1 case study and the "Jenkins or GitHub Actions?" article in `infra/docs/case-studies/`
+- [ ] T121 Front-door README for reviewers in `infra/README.md`: what the platform is in two sentences, one diagram taken from the lab map view, a table of measured results that links each number to its row in `infra/docs/verification-log.md` (rebuild time, start time, policy rejections, p95 checkout, trace coverage), screenshots in `infra/docs/img/` (Argo CD applications, one Grafana dashboard, one purchase trace), a link to a 2–3 minute recorded walkthrough of a change going from commit to prod, and a "start here" list; move the current layout and setup text below it. Add a short pointer to it at the top of `app/README.md` and `gitops/README.md`, and set a description and topics on the three GitHub repositories. A first version can ship as soon as User Story 1 works in a browser; refresh the numbers with T102. The "how this was built" section is separate and stays parked
 
 ---
 
@@ -266,6 +269,7 @@
 - **US5** (Phase 7): needs US2.
 - **US6** (Phase 8): needs US2.
 - **US7** (Phase 9): needs only Phase 2 (T026, T027).
+- T122 needs only T029 and the Kyverno policies of Phase 2. T123 needs US2 for the checkout SLIs and US6 for traffic to measure.
 - US4, US5, US6 and US7 can run in parallel once their dependencies are met.
 
 ### Within each story
