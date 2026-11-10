@@ -157,8 +157,13 @@ remote "export PATH=/opt/homebrew/opt/openjdk@21/bin:\$PATH; java -version" >/de
   && pass "Java is available for the agent on the lab host" || fail "Java is missing on $MINI (openjdk@21)"
 
 echo "SonarQube Cloud (T105)"
-gh_read "repos/$SV_OWNER/sorted-vintage-app/commits/main/check-runs" '.check_runs[].name' 2>/dev/null | grep -qi sonar \
-  && pass "SonarQube Cloud check on sorted-vintage-app main" || fail "no SonarQube Cloud check on the latest sorted-vintage-app main commit"
+# The build workflow runs only when services/** changes, so look at the newest main commit that
+# touched services/, not main itself (a docs-only commit on main has no SonarQube check).
+app_sha="$(gh_read "repos/$SV_OWNER/sorted-vintage-app/commits?sha=main&path=services&per_page=1" '.[0].sha' 2>/dev/null || true)"
+[[ "$app_sha" =~ ^[0-9a-f]{40}$ ]] || fail "could not find the newest sorted-vintage-app main commit that changed services/"
+gh_read "repos/$SV_OWNER/sorted-vintage-app/commits/$app_sha/check-runs" '.check_runs[].name' 2>/dev/null | grep -qi sonar \
+  && pass "SonarQube Cloud check on sorted-vintage-app main (${app_sha:0:7}, newest services/ change)" \
+  || fail "no SonarQube Cloud check on sorted-vintage-app ${app_sha:0:7}, the newest main commit that changed services/"
 # The free plan gates pull requests, not main, so check the newest analysed pull request (public API).
 SONAR_PROJECT="${SONAR_PROJECT:-$(tr '[:upper:]' '[:lower:]' <<<"$SV_OWNER")_sv-bff}"
 gate="$(curl -fsS "https://sonarcloud.io/api/project_pull_requests/list?project=$SONAR_PROJECT" \
