@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Writes ~/sv-terraform/secrets.auto.tfvars (git-ignored, mode 600) on the lab host, as bot.
 # Asks for each environment's Stripe test keys without echoing them, and generates everything else:
-#   - the webhook signing secret of each sandbox (stripe listen --print-secret, projects sv-dev and sv-prod)
+#   - the webhook signing secret of each sandbox: stripe listen --print-secret with that sandbox's
+#     secret key, the key the forwarder uses (each key has its own listen secret; research R4)
 #   - one database password per environment and database
 #   - an mkcert certificate for *.sortedvtg.lan (the mkcert CA stays in bot's CAROOT; it is not installed here)
 #   - Garage's RPC secret, admin token and S3 keys, through add-garage-secrets.sh
@@ -42,8 +43,8 @@ for env in dev prod; do
   echo "Stripe sandbox sorted-vintage-$env (Developers > API keys, test mode):"
   sk="$(ask "  Secret key" "sk_test_")"
   pk="$(ask "  Publishable key" "pk_test_")"
-  whsec="$(stripe listen --project-name "sv-$env" --print-secret 2>/dev/null)"
-  [[ "$whsec" == whsec_* ]] || { echo "Could not read the webhook signing secret for sv-$env; run: stripe login --project-name sv-$env"; exit 1; }
+  whsec="$(stripe listen --api-key "$sk" --print-secret 2>/dev/null)"
+  [[ "$whsec" == whsec_* ]] || { echo "Could not read the webhook signing secret for sv-$env with its secret key."; exit 1; }
   {
     echo "  $env = {"
     echo "    stripe_secret_key      = \"$sk\""
