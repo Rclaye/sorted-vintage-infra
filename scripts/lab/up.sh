@@ -8,7 +8,7 @@ set -euo pipefail
 require_lab_user
 require_docker
 if pgrep -i -x ollama >/dev/null 2>&1 || pgrep -i -f 'Ollama.app' >/dev/null 2>&1; then
-  die "Ollama is running. Quit it in the admin account first (LocalMind and the lab do not fit together)."
+  die "Ollama is running. Quit it in the admin account first (local models and the lab do not fit together)."
 fi
 docker inspect "$NODE" >/dev/null 2>&1 || die "no Kind node '$NODE'. Build the lab with 'make rebuild'."
 

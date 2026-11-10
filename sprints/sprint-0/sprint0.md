@@ -5,17 +5,17 @@ Author: Platform Engineering
 
 1. Executive Summary & Sprint 0 Objective
 
-Sprint 0 creates a clean, safe and reachable starting point before any platform code is written. It retires secrets left over from the Clixx AWS work, creates the three Sorted Vintage repositories with secret scanning from the first commit, sets up the Mac mini as the lab host for working sessions, and records the first two architecture decisions.
+Sprint 0 creates a clean, safe and reachable starting point before any platform code is written. It retires secrets left over from the Clixx AWS work, creates the three Sorted Vintage repositories with secret scanning from the first commit, sets up the lab host as the lab host for working sessions, and records the first two architecture decisions.
 
 Sprint Objective
-Every repository exists with guardrails on, no old credential is still live or public, and `ssh mac-mini` works from the MacBook Air.
+Every repository exists with guardrails on, no old credential is still live or public, and `ssh lab-admin` works from the workstation.
 
 2. Lab Topology After Sprint 0
 
                   ┌─────────────────────────────── Tailscale (private network, no open ports) ───────────────────────────────┐
                   │                                                                                                          │
    ┌──────────────▼──────────────┐          ┌──────────────────────────────┐          ┌──────────────────────────────┐      │
-   │  MacBook Air M4 (16 GB)     │   ssh    │  Mac mini M4 (16 GB)         │          │  MacBook Pro Intel (8 GB)    │      │
+   │  Laptop (16 GB)             │   ssh    │  Desktop (16 GB, arm64)      │          │  Older laptop (8 GB)         │      │
    │  Workstation                ├─────────►│  Lab host (on when working)  │          │  CI (from Sprint 1)          │◄─────┘
    │  Editor, git, pre-commit    │          │  Docker, kind, terraform     │          │  Jenkins, SonarQube          │
    └──────────────┬──────────────┘          └──────────────────────────────┘          └──────────────────────────────┘
@@ -64,33 +64,33 @@ Acceptance Criteria Verification:
 - A direct push to `main` is rejected.
 - All three repositories show a green `checks` run on their first pull request.
 
-Ticket 0.3 — Mac Mini as the Lab Host
+Ticket 0.3 — Mac Lab host as the Lab Host
 Owner: Platform / SRE Engineer
-Story: As the platform owner, I want the Mac mini to carry the platform toolchain and stay awake while I work, so that Sprint 1 can build the cluster on it.
+Story: As the platform owner, I want the lab host to carry the platform toolchain and stay awake while I work, so that Sprint 1 can build the cluster on it.
 
-The lab runs in working sessions, not around the clock: the mini is on while I work and off otherwise.
+The lab runs in working sessions, not around the clock: the lab host is on while I work and off otherwise.
 
 Implementation Requirements:
 - Install the toolchain: `brew bundle --file scripts/Brewfile` (kind, kubectl, Helm, Terraform, gh, pre-commit, gitleaks) plus Docker Desktop as the container runtime. Review the Brewfile first.
-- Keep the mini awake during a session with Amphetamine.
-- System Settings → General → Sharing: turn on Remote Login, so the Air can connect over SSH.
+- Keep the lab host awake during a session.
+- System Settings → General → Sharing: turn on Remote Login, so the workstation can connect over SSH.
 - Docker Desktop → Settings → Resources: 12 GB of memory.
 
 Acceptance Criteria Verification:
-- `kind version`, `terraform version` and `docker info` succeed on the mini.
+- `kind version`, `terraform version` and `docker info` succeed on the lab host.
 
-Ticket 0.4 — SSH From the Air to the Mini
+Ticket 0.4 — SSH From the workstation to the Lab host
 Owner: Platform Engineer
-Story: As the platform owner, I want to work on the mini from the MacBook Air, so that I can edit, run Terraform and open dashboards from one machine.
+Story: As the platform owner, I want to work on the lab host from the workstation, so that I can edit, run Terraform and open dashboards from one machine.
 
 Implementation Requirements:
-- On the Air: `brew bundle --file scripts/Brewfile`, create an SSH key if there is none (`ssh-keygen -t ed25519`), and copy it to the mini (`ssh-copy-id <user>@<mini-address>`).
-- Add a `Host mac-mini` entry to `~/.ssh/config` on the Air.
+- On the workstation: `brew bundle --file scripts/Brewfile`, create an SSH key if there is none (`ssh-keygen -t ed25519`), and copy it to the lab host (`ssh-copy-id <user>@<mini-address>`).
+- Add a `Host lab-admin` entry to `~/.ssh/config` on the workstation.
 - Optional, for working away from home: install Tailscale on both machines. No router ports are opened either way.
 - Write `docs/runbooks/remote-access.md`: how to connect and how to tunnel Argo CD and Grafana.
 
 Acceptance Criteria Verification:
-- `ssh mac-mini hostname` succeeds from the Air with key login.
+- `ssh lab-admin hostname` succeeds from the workstation with key login.
 
 Ticket 0.5 — Decision Records and the Spec Kit Workspace
 Owner: Platform Engineer
@@ -106,7 +106,7 @@ Acceptance Criteria Verification:
 
 4. Sprint Verification
 
-Run `sprints/sprint-0/verify_sprint0.sh` from the MacBook Air. It checks the local toolchain, the pre-commit hooks in each clone, a full-history gitleaks scan, branch rules on GitHub and the mini over SSH. It exits non-zero on the first failure.
+Run `sprints/sprint-0/verify_sprint0.sh` from the workstation. It checks the local toolchain, the pre-commit hooks in each clone, a full-history gitleaks scan, branch rules on GitHub and the lab host over SSH. It exits non-zero on the first failure.
 
 5. Out of Scope for Sprint 0
 

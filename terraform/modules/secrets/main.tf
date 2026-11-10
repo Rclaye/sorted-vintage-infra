@@ -1,5 +1,5 @@
 # Bootstrap Secrets, created before Argo CD syncs the apps that read them (plan: Complexity Tracking).
-# Values come from the git-ignored secrets.auto.tfvars; they also end up in the local state on the mini.
+# Values come from the git-ignored secrets.auto.tfvars; they also end up in the local state on the lab host.
 
 terraform {
   required_providers {

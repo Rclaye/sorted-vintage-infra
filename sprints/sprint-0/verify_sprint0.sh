@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Sprint 0 verification. Run on the MacBook Air from anywhere.
+# Sprint 0 verification. Run on the workstation from anywhere.
 #   SV_ROOT  folder holding the three clones (default: ~/Sorted-Vintage/src)
 #   SV_OWNER GitHub owner (default: the logged-in gh user)
-#   MINI     ssh host for the Mac mini (default: mac-mini)
+#   MINI     ssh host for the lab host's admin account (default: SV_LAB_ADMIN_SSH from
+#            scripts/lab/local.env, else lab-admin)
 set -euo pipefail
 
 SV_ROOT="${SV_ROOT:-$HOME/Sorted-Vintage/src}"
-MINI="${MINI:-mac-mini}"
+# Host and account names stay out of Git (ADR-0009): they come from the environment or from
+# scripts/lab/local.env, which is git-ignored (copy scripts/lab/local.env.example).
+INFRA="$(cd "$(dirname "$0")/../.." && pwd)"
+if [[ -f "$INFRA/scripts/lab/local.env" ]]; then set -a; . "$INFRA/scripts/lab/local.env"; set +a; fi
+MINI="${MINI:-${SV_LAB_ADMIN_SSH:-lab-admin}}"
 REPOS=(sorted-vintage-infra sorted-vintage-app sorted-vintage-gitops)
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$*"; }
@@ -39,13 +44,13 @@ for f in docs/adr/0001-local-kind-instead-of-eks.md docs/adr/0002-git-is-the-onl
   [[ -f "$I/$f" ]] && pass "$f" || fail "missing $f"
 done
 
-echo "Mac mini (Tickets 0.3 and 0.4)"
+echo "Lab host (Tickets 0.3 and 0.4)"
 ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" true 2>/dev/null && pass "ssh $MINI with a key" || fail "cannot ssh to $MINI with a key"
 remote() { ssh -o BatchMode=yes -o ConnectTimeout=8 "$MINI" "export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH; $1"; }
-for t in kind terraform kubectl helm; do remote "command -v $t >/dev/null" && pass "mini has $t" || fail "mini is missing $t"; done
-remote "docker info >/dev/null 2>&1" && pass "container runtime is running on the mini" || fail "Docker Desktop is not running on the mini"
+for t in kind terraform kubectl helm; do remote "command -v $t >/dev/null" && pass "lab host has $t" || fail "lab host is missing $t"; done
+remote "docker info >/dev/null 2>&1" && pass "container runtime is running on the lab host" || fail "Docker Desktop is not running on the lab host"
 
 echo
 echo "Sprint 0 verification passed."
 echo "Manual checks left: the SonarQube token is revoked, the old RDS password fails,"
-echo "scripts/audit-old-secrets.sh reports no findings, and the home router has no port forwarding rules."
+echo "scripts/audit-old-secrets.sh reports no findings, and the router has no port forwarding rules."

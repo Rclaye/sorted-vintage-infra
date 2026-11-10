@@ -1,9 +1,9 @@
 # Root 2 of 2: Argo CD, the root Application and the bootstrap Secrets. Applied after terraform/cluster.
-# Run on the Mac mini as bot. Needs ~/sv-terraform/secrets.auto.tfvars (scripts/secrets/new-secrets-tfvars.sh),
+# Run on the lab host as bot. Needs ~/sv-terraform/secrets.auto.tfvars (scripts/secrets/new-secrets-tfvars.sh),
 # passed with -var-file; make rebuild and the Jenkinsfile do that.
 
 terraform {
-  required_version = ">= 1.11, < 2.0" # applied with 1.17 on the mini and in CI; the Air only validates
+  required_version = ">= 1.11, < 2.0" # applied with 1.17 on the lab host and in CI; the workstation only validates
 
   # State in bot's private ~/sv-terraform, like the cluster root:
   #   terraform init -backend-config=path=$HOME/sv-terraform/bootstrap.tfstate

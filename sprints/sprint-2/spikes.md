@@ -1,6 +1,6 @@
 # Sprint 2 spikes
 
-Results of the spikes in Ticket 2.1, run on 2026-11-05 on the Mac mini as `bot` and from the Air's browser. Each entry says what was done, the result and what it changes. Throwaway clusters were named `sv-spike` and deleted afterwards; the lab cluster was only read, and the Stripe work stayed in the dev sandbox.
+Results of the spikes in Ticket 2.1, run on 2026-11-05 on the lab host as `bot` and from the workstation's browser. Each entry says what was done, the result and what it changes. Throwaway clusters were named `sv-spike` and deleted afterwards; the lab cluster was only read, and the Stripe work stayed in the dev sandbox.
 
 ## Live Keycloak check (read-only)
 
@@ -43,9 +43,9 @@ Results of the spikes in Ticket 2.1, run on 2026-11-05 on the Mac mini as `bot` 
 
 ## Onboarding redirect (T052, research R6)
 
-**Result: pass.** Richard completed Stripe's hosted onboarding in the Air's browser, through the SSH tunnel on port 8443, for a prefilled test account.
+**Result: pass.** Richard completed Stripe's hosted onboarding in the workstation's browser, through the SSH tunnel on port 8443, for a prefilled test account.
 
-- The Account Link accepted `https://dev.sortedvtg.lan:8443/sell/onboarding` as `return_url` and `?refresh=1` as `refresh_url`. The browser landed on `https://dev.sortedvtg.lan:8443/sell/onboarding` and Traefik answered 404, because the BFF has no page there yet. So the `localhost` fallback is not needed, and T043 uses `https://<env>.sortedvtg.lan:8443/sell/onboarding`. A URL without the port does not reach the lab from the Air.
+- The Account Link accepted `https://dev.sortedvtg.lan:8443/sell/onboarding` as `return_url` and `?refresh=1` as `refresh_url`. The browser landed on `https://dev.sortedvtg.lan:8443/sell/onboarding` and Traefik answered 404, because the BFF has no page there yet. So the `localhost` fallback is not needed, and T043 uses `https://<env>.sortedvtg.lan:8443/sell/onboarding`. A URL without the port does not reach the lab from the workstation.
 - Afterwards `card_payments` and `stripe_transfers` were both `active` with no requirements left: payout status `ready`.
 - Steps on the hosted page, with the details prefilled: payout bank (a Stripe Link popup appears: choose "Finish without saving"; the test account ending 6789 succeeds, 2227, 1113, 1116 and 3335 simulate failures), public details, review, "Agree and submit". About five minutes by hand, inside SC-001's five-minute target.
 - **Statement descriptor:** the API accepted `SORTED VINTAGE`, but the hosted page rejected it: it must resemble the business URL or legal name (`ACCESSIBLE` passed). T043 and T051 derive the descriptor from the seller's name or business URL, never a fixed brand string.

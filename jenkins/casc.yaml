@@ -1,6 +1,7 @@
-# Jenkins controller as code (T103, research R15). Copied to /Users/ricomillz/.jenkins/casc.yaml by
+# Jenkins controller as code (T103, research R15). Copied to /Users/<jenkins-account>/.jenkins/casc.yaml by
 # scripts/jenkins/air-setup.sh; Jenkins reads it at start (CASC_JENKINS_CONFIG). No secret values
-# here: the admin password and the agent key are read from files only the Air's ricomillz can read.
+# here: the admin password and the agent key are read from files only the workstation's Jenkins account can read.
+# The lab host's name comes from SV_LAB_HOST, which air-setup.sh puts in the LaunchDaemon (ADR-0009).
 jenkins:
   systemMessage: "Sorted Vintage lab: one job, infra-terraform. Configured by jenkins/casc.yaml in sorted-vintage-infra; changes made in the UI are lost at restart."
   numExecutors: 0                      # the controller runs no builds
@@ -19,19 +20,19 @@ jenkins:
   disableRememberMe: true
   nodes:
     - permanent:
-        name: mac-mini
+        name: lab-host
         labelString: lab
         numExecutors: 1
         mode: EXCLUSIVE
         remoteFS: /Users/bot/jenkins-agent
         launcher:
           ssh:
-            host: ricomillzs-Mac-mini.local
+            host: "${SV_LAB_HOST}"
             port: 22
             credentialsId: mini-agent-ssh
             javaPath: /opt/homebrew/opt/openjdk@21/bin/java
             sshHostKeyVerificationStrategy:
-              knownHostsFileKeyVerificationStrategy: {}   # the mini's key, copied from your verified known_hosts
+              knownHostsFileKeyVerificationStrategy: {}   # the lab host's key, copied from your verified known_hosts
         retentionStrategy: always
 
 credentials:
@@ -42,7 +43,7 @@ credentials:
               scope: SYSTEM
               id: mini-agent-ssh
               username: bot
-              description: Agent key for bot on the Mac mini (restricted in its authorized_keys)
+              description: Agent key for bot on the lab host (restricted in its authorized_keys)
               privateKeySource:
                 directEntry:
                   privateKey: "${readFile:${SV_AGENT_KEY_FILE}}"

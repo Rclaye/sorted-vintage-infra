@@ -1,8 +1,8 @@
-// infra-terraform (T014, ADR-0002, constitution Principle III): runs on the mini as bot (label lab).
+// infra-terraform (T014, ADR-0002, constitution Principle III): runs on the lab host as bot (label lab).
 // fmt, validate, tfsec, plan; if anything would change, wait for a person to approve, then apply.
 // DESTROY=true plans a destroy and needs two approvals. State and secrets.auto.tfvars are in
 // bot's private ~/sv-terraform, shared with make rebuild. Then verify (T107) runs the current
-// sprint's verify script on the mini (reads and server-side dry runs only) and fails the build if it fails.
+// sprint's verify script on the lab host (reads and server-side dry runs only) and fails the build if it fails.
 pipeline {
   agent { label 'lab' }
   options {

@@ -1,4 +1,4 @@
-# Lab sessions on the Mac mini (T013, FR-018, FR-024). Run as bot from this repo:
+# Lab sessions on the lab host (T013, FR-018, FR-024). Run as bot from this repo:
 #   make up       start a session: Kind node up, wait until every Argo CD app is Synced/Healthy
 #   make down     end a session: read-only check that Postgres archives are current, then stop
 #   make rebuild  terraform apply for cluster then bootstrap, then wait for health (one command,

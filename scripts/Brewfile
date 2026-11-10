@@ -7,7 +7,7 @@ brew "helm"
 brew "gh"
 brew "pre-commit"
 brew "gitleaks"
-# Sprint 1 (Ticket 1.1), installed on the mini by its admin account; bot runs them
+# Sprint 1 (Ticket 1.1), installed on the lab host by its admin account; bot runs them
 tap "stripe/stripe-cli"
 brew "mkcert"
 brew "stripe/stripe-cli/stripe"
