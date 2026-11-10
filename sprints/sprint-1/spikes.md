@@ -4,7 +4,7 @@ Results of the spikes in Ticket 1.1 and the later tickets that record findings h
 
 ## T008: Kind survives stop and start (research R1)
 
-**Result: pass.** 2026-11-01, Mac mini M4, as `bot`. Kind v0.33.0, node image `kindest/node:v1.37.0`, Docker Desktop engine 29.7.2 with 12 GB.
+**Result: pass.** 2026-11-01, the lab host, as `bot`. Kind v0.33.0, node image `kindest/node:v1.37.0`, Docker Desktop engine 29.7.2 with 12 GB.
 
 What it did:
 
@@ -34,7 +34,7 @@ keychain cannot be accessed because the current session does not allow user inte
 
 An empty client config (`DOCKER_CONFIG` holding `{}`) and `bot`'s own socket (`DOCKER_HOST=unix://$HOME/.docker/run/docker.sock`) failed the same way, so the keychain lookup comes from Docker Desktop's backend, not the `docker` command. `bot` has no registry logins (`"auths": {}`).
 
-- **Workaround used:** one `docker pull` of the node image in a Terminal in `bot`'s desktop session at the mini. After that, the SSH run passed.
+- **Workaround used:** one `docker pull` of the node image in a Terminal in `bot`'s desktop session at the lab host. After that, the SSH run passed.
 - **Not affected:** the images the cluster runs are pulled by containerd inside the Kind node, not by Docker Desktop.
 - **Open, for Ticket 1.7:** the Jenkins agent logs in over SSH, so `make rebuild` will fail the same way whenever the Kind version changes and the new node image isn't cached yet. Options to test there: the keychain "Always Allow" for `bot`, Docker Desktop's credential settings, or pre-pulling the node image as a documented step of a Kind upgrade.
 
@@ -82,11 +82,11 @@ Command details, because the CLI's v2 syntax is not obvious:
 - **`payment_method_types` is no longer accepted.** `stripe trigger payment_intent.succeeded` fails because its fixture sends it. PaymentIntents use `automatic_payment_methods`, with payment methods chosen in the Dashboard. T066 and the traffic generator (R6) must not send `payment_method_types`.
 - **`stripe listen` needs the events named** (`--events`, `--all-snapshot` or `--all-thin`). The R4 Deployment must pass `--events` with the list Payments handles.
 - **`localhost` resolves to `::1` first** for the CLI's forwarder. Forward to `127.0.0.1` or a Service name, never `localhost`.
-- **The mini's firewall drops loopback connections to apps not on its allow list.** Homebrew's Python was dropped even on `127.0.0.1`; `/usr/bin/python3` is allowed. This affects only processes on macOS; the forwarder will run inside the cluster.
+- **The lab host's firewall drops loopback connections to apps not on its allow list.** Homebrew's Python was dropped even on `127.0.0.1`; `/usr/bin/python3` is allowed. This affects only processes on macOS; the forwarder will run inside the cluster.
 
 ## T022: CloudNativePG backup and restore against Garage (research R19)
 
-**Result: pass.** 2026-11-02, on a throwaway Kind cluster `sv-spike` on the mini, as `bot`, with the same manifests and chart versions as `sorted-vintage-gitops/platform/garage` and `platform/postgres`: Garage v2.5.0, cert-manager v1.21.3, CloudNativePG chart 0.29.1 (operator 1.30.1), Barman Cloud Plugin chart 0.8.1 (v0.15.1). The cluster was deleted afterwards.
+**Result: pass.** 2026-11-02, on a throwaway Kind cluster `sv-spike` on the lab host, as `bot`, with the same manifests and chart versions as `sorted-vintage-gitops/platform/garage` and `platform/postgres`: Garage v2.5.0, cert-manager v1.21.3, CloudNativePG chart 0.29.1 (operator 1.30.1), Barman Cloud Plugin chart 0.8.1 (v0.15.1). The cluster was deleted afterwards.
 
 ### Garage and its setup Job
 
@@ -195,12 +195,12 @@ Run on 2026-11-03 on a throwaway Kind cluster `sv-spike` (same `kindest/node:v1.
 - `scripts/policy-check.sh` fails when a service overlay holds a non-`ghcr.io/rclaye/` image, and when an overlay does not set `namespace: sv-<env>` (Ticket 1.4 acceptance 2, run locally; CI run pending).
 - Not measured: Kyverno's memory (crictl output changed); measure in the lab after deploy for T032.
 
-## T104, T103: Jenkins on the Air and Terraform state (Ticket 1.7)
+## T104, T103: Jenkins on the workstation and Terraform state (Ticket 1.7)
 
 Run on 2026-11-05.
 
-- Terraform state moved out of `bot`'s clone into `~/sv-terraform` on the mini (folder 700, files 600, with `secrets.auto.tfvars`), so `make rebuild` and Jenkins share it. Spiked on a private scratch copy first; after `terraform init -migrate-state` both roots planned with no changes against the live cluster. The Kind module's `kubeconfig_path` was left alone: changing it forces the cluster to be replaced.
-- `air-setup.sh` on the Air: Jenkins 2.580.2 (Homebrew `jenkins-lts`) runs as the Air's standard account `ricomillz`, listening on `127.0.0.1:8080` only; anonymous requests get 403. Plugins from `jenkins/plugins.txt` (69 with dependencies) installed by the Plugin Installation Manager 2.15.0, pinned and checksum-checked. The setup wizard is off; `casc.yaml` defines the admin user (password generated into a file only `ricomillz` reads), the agent and the job.
-- Found while running it: commands run as `ricomillz` must start from `/` (the everyday home is 700, so `getcwd` failed and the plugin step stopped); `launchctl bootstrap` fails with "5: Input/output error" until the old service has fully unloaded; Jenkins 2.580 no longer accepts `crumbIssuer.standard.excludeClientIPFromCrumb` (CSRF protection is on by default). All three fixed in the scripts.
-- The agent key is in `bot`'s `authorized_keys` with `restrict`; the `mac-mini` agent connects (`remoting.jar` as `bot` with `/opt/homebrew/opt/openjdk@21/bin/java`).
+- Terraform state moved out of `bot`'s clone into `~/sv-terraform` on the lab host (folder 700, files 600, with `secrets.auto.tfvars`), so `make rebuild` and Jenkins share it. Spiked on a private scratch copy first; after `terraform init -migrate-state` both roots planned with no changes against the live cluster. The Kind module's `kubeconfig_path` was left alone: changing it forces the cluster to be replaced.
+- `air-setup.sh` on the workstation: Jenkins 2.580.2 (Homebrew `jenkins-lts`) runs as the workstation's standard account, listening on `127.0.0.1:8080` only; anonymous requests get 403. Plugins from `jenkins/plugins.txt` (69 with dependencies) installed by the Plugin Installation Manager 2.15.0, pinned and checksum-checked. The setup wizard is off; `casc.yaml` defines the admin user (password generated into a file only the Jenkins account reads), the agent and the job.
+- Found while running it: commands run as the Jenkins account must start from `/` (the everyday home is 700, so `getcwd` failed and the plugin step stopped); `launchctl bootstrap` fails with "5: Input/output error" until the old service has fully unloaded; Jenkins 2.580 no longer accepts `crumbIssuer.standard.excludeClientIPFromCrumb` (CSRF protection is on by default). All three fixed in the scripts.
+- The agent key is in `bot`'s `authorized_keys` with `restrict`; the `lab-host` agent connects (`remoting.jar` as `bot` with `/opt/homebrew/opt/openjdk@21/bin/java`).
 - `tfsec` reports no problems on `terraform/`. tfsec is being folded into Trivy; switching to `trivy config` is a later improvement.

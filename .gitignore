@@ -46,8 +46,11 @@ build/
 .gradle/
 *.class
 
-# --- Claude Code (per-machine settings) ---
-.claude/settings.local.json
+# --- Local editor and assistant tooling ---
+.claude/
+
+# --- This machine's host and account names (scripts/lab/local.env.example) ---
+scripts/lab/local.env
 
 # --- Editors and OS ---
 .DS_Store

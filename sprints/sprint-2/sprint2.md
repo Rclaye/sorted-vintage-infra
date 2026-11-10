@@ -42,7 +42,7 @@ Repos: infra (`sprints/sprint-2/spikes.md`)
 Story: As the platform owner, I want the assumptions User Story 1 rests on tested before code depends on them, as Sprint 1 did.
 
 Implementation Requirements:
-- T052 Onboarding redirect: with the Stripe CLI as `bot`, create a test v2 account and an Account Link whose `return_url` and `refresh_url` are `https://dev.sortedvtg.lan/sell/onboarding`, complete onboarding in the Air's browser through the SSH tunnel, and record whether the browser lands back on the lab. If it does not, T043 uses `https://localhost:8443/sell/onboarding`. Close the test account afterwards.
+- T052 Onboarding redirect: with the Stripe CLI as `bot`, create a test v2 account and an Account Link whose `return_url` and `refresh_url` are `https://dev.sortedvtg.lan/sell/onboarding`, complete onboarding in the workstation's browser through the SSH tunnel, and record whether the browser lands back on the lab. If it does not, T043 uses `https://localhost:8443/sell/onboarding`. Close the test account afterwards.
 - JVM on the lab: build a minimal Spring Boot 3 / Java 21 image for `linux/arm64`, run it on a throwaway cluster `sv-spike` with the Kyverno policies, and record its working set at idle and the startup time. Settle the heap flags (`-XX:MaxRAMPercentage`) and the memory limit Listings will use against the 0.4 GB budget.
 - Seller token for scripts: decide how `verify_sprint2.sh` and the seed job obtain a seller's access token. Options: a dev-only Keycloak client with direct-access grants, limited to `sv-dev`; or the script driving the BFF login form. Either way the verify seller is one dedicated `sv-dev` user declared through T120, and its password is generated into `secrets.auto.tfvars` and reaches `sv-dev` as a Terraform-created Secret, never in Git. Record the choice and why; prod is only ever checked read-only.
 - Onboarding without a browser: done, and it cannot be done. Stripe refuses an API-side terms acceptance for accounts where it collects requirements, so each seed seller and the verify seller is onboarded once by hand in the dev sandbox and its account then stays ready (spikes.md).
@@ -66,7 +66,7 @@ Implementation Requirements:
 
 Acceptance Criteria Verification:
 - A pull request that adds a stub Gradle service shows build, Trivy and the SonarQube Cloud quality gate; after merge its dev tag reaches gitops with no manual step.
-- `https://dev.sortedvtg.lan:8443/healthz` answers 200 from the Air's browser through the tunnel.
+- `https://dev.sortedvtg.lan:8443/healthz` answers 200 from the workstation's browser through the tunnel.
 - `infra-terraform` stays green with `sprints/sprint-2/` present and no `verify_sprint2.sh` yet.
 - A client setting changed in the realm file reaches the live `sv-dev` realm after one sync, with no admin-console edit.
 
@@ -142,16 +142,16 @@ Repos: infra (`sprints/sprint-2`, `docs/verification-log.md`)
 Story: As the platform owner, I want User Story 1 checked by a script on every Jenkins build, and the memory budget re-measured with real services.
 
 Implementation Requirements:
-- T115 `sprints/sprint-2/verify_sprint2.sh`, after T046 and T051. Both modes first run `verify_sprint1.sh`, then read-only checks: Listings and Payments health in both namespaces, the BFF through its Ingress (with the mkcert CA), the forwarder ready, the seeded listings searchable. From the Air only, never in the Jenkins stage: bad Stripe signatures refused on both webhooks, and in `sv-dev` a scripted draft, two photos and publish by the verify seller that appears in search within 5 seconds (T113) and is then deleted, plus bad photo type and size refused. Prod is read-only.
+- T115 `sprints/sprint-2/verify_sprint2.sh`, after T046 and T051. Both modes first run `verify_sprint1.sh`, then read-only checks: Listings and Payments health in both namespaces, the BFF through its Ingress (with the mkcert CA), the forwarder ready, the seeded listings searchable. From the workstation only, never in the Jenkins stage: bad Stripe signatures refused on both webhooks, and in `sv-dev` a scripted draft, two photos and publish by the verify seller that appears in search within 5 seconds (T113) and is then deleted, plus bad photo type and size refused. Prod is read-only.
 - T119 Re-measure memory as in T032, and write `sprints/sprint-2/sprint2_retro.md`; add every acceptance check above to `docs/verification-log.md`.
 
 Acceptance Criteria Verification:
-- `verify_sprint2.sh` passes from the Air (all checks) and as the Jenkins `verify` stage (read-only checks).
+- `verify_sprint2.sh` passes from the workstation (all checks) and as the Jenkins `verify` stage (read-only checks).
 - The retro records memory by component next to the plan, and the verification log has a row for every Sprint 2 acceptance check.
 
 4. Sprint Verification
 
-Run `sprints/sprint-2/verify_sprint2.sh` from the MacBook Air with the lab up for every check. Jenkins runs it with `MINI=local` at the end of every `infra-terraform` build once it is on `main`, and in that mode it only reads, as the plan's Complexity Tracking allows. From the Air it also makes one scripted publish in `sv-dev` by the verify seller and deletes it again; it never writes to prod. Quickstart step 2 is run once by hand for the SC-001 timings, which the script cannot measure through Stripe-hosted onboarding.
+Run `sprints/sprint-2/verify_sprint2.sh` from the workstation with the lab up for every check. Jenkins runs it with `MINI=local` at the end of every `infra-terraform` build once it is on `main`, and in that mode it only reads, as the plan's Complexity Tracking allows. From the workstation it also makes one scripted publish in `sv-dev` by the verify seller and deletes it again; it never writes to prod. Quickstart step 2 is run once by hand for the SC-001 timings, which the script cannot measure through Stripe-hosted onboarding.
 
 5. Out of Scope for Sprint 2
 

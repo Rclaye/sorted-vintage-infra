@@ -19,7 +19,7 @@ jobs:
           python-version: "3.12"
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.17.1"   # matches the mini
+          terraform_version: "1.17.1"   # matches the lab host
           terraform_wrapper: false
       - uses: pre-commit/action@v3.0.1
 

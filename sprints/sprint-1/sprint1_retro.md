@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Sprint 1 built the platform every user story runs on. One Terraform apply creates a single-node Kind cluster on the Mac mini and installs Argo CD; Argo CD installs everything else from `sorted-vintage-gitops`. A stub BFF made from the service template has travelled the full delivery path to dev and, through an approved promotion, to prod. Jenkins on the Air runs the infrastructure pipeline on the mini and ends every build by checking the live lab. `verify_sprint1.sh` passed every automated check on 2026-11-05, from the Air and as the Jenkins `verify` stage (build #4). Measured memory is about 6.1 GiB of pods against the plan's 9.5 GB estimate for the finished platform, so Sprint 2 starts with room to spare.
+Sprint 1 built the platform every user story runs on. One Terraform apply creates a single-node Kind cluster on the lab host and installs Argo CD; Argo CD installs everything else from `sorted-vintage-gitops`. A stub BFF made from the service template has travelled the full delivery path to dev and, through an approved promotion, to prod. Jenkins on the workstation runs the infrastructure pipeline on the lab host and ends every build by checking the live lab. `verify_sprint1.sh` passed every automated check on 2026-11-05, from the workstation and as the Jenkins `verify` stage (build #4). Measured memory is about 6.1 GiB of pods against the plan's 9.5 GB estimate for the finished platform, so Sprint 2 starts with room to spare.
 
 ## Completed Work
 
@@ -46,9 +46,9 @@ Sprint 1 built the platform every user story runs on. One Terraform apply create
 
 ### Ticket 1.7: Jenkins and SonarQube Cloud (T103–T107, T014)
 
-- Jenkins on the Air as a dedicated standard account, on `127.0.0.1:8080` only, configured as code; the agent runs on the mini as `bot` over a restricted key.
-- `infra-terraform`: fmt, validate, tfsec, plan, a manual approval before any apply, then `verify` runs the sprint's verify script on the mini (T107).
-- Terraform state and `secrets.auto.tfvars` moved to `~/sv-terraform` on the mini, shared by `make rebuild` and Jenkins.
+- Jenkins on the workstation as a dedicated standard account, on `127.0.0.1:8080` only, configured as code; the agent runs on the lab host as `bot` over a restricted key.
+- `infra-terraform`: fmt, validate, tfsec, plan, a manual approval before any apply, then `verify` runs the sprint's verify script on the lab host (T107).
+- Terraform state and `secrets.auto.tfvars` moved to `~/sv-terraform` on the lab host, shared by `make rebuild` and Jenkins.
 - SonarQube Cloud scans app pull requests after tests; the quality gate passed on app #4 (T105).
 - Approval run, build #6 on 2026-11-05: a `terraform_data` record (infra #25) gave the pipeline a harmless change. The cluster plan showed `1 to add`, the build paused at `approve` until Richard clicked Apply, applied it (bootstrap: no changes), found all 28 apps healthy and passed `verify`.
 
@@ -74,7 +74,7 @@ Measured on 2026-11-05 on the lab with all 28 Argo CD apps Synced and Healthy. T
 | Ingress, Stripe forwarders, traffic generator | 0.4 GB | 0.07 GiB | Traefik and Mailpit; the forwarders and generator come later |
 | **Pods, total** | **about 9.5 GB** | **6.16 GiB** | |
 
-Over the last 24 hours of the same series: median 5.95 GiB, 95th percentile 7.25 GiB. The total was above 9 GiB for about 10 minutes, during a start, when old and new containers overlap. `docker stats` shows the node container at 7.1 of 11.9 GiB, which adds the kubelet, containerd and page cache to the pods. The mini reported 36% of its 16 GB free with the lab up.
+Over the last 24 hours of the same series: median 5.95 GiB, 95th percentile 7.25 GiB. The total was above 9 GiB for about 10 minutes, during a start, when old and new containers overlap. `docker stats` shows the node container at 7.1 of 11.9 GiB, which adds the kubelet, containerd and page cache to the pods. The lab host reported 36% of its 16 GB free with the lab up.
 
 What it means:
 
@@ -90,7 +90,7 @@ What it means:
 | MinIO | Garage (R19) | MinIO's community edition is archived |
 | Stripe Express accounts through Accounts v1 | Accounts v2 with `dashboard: none` and Stripe-hosted onboarding (R17) | New sandboxes refuse v1 account creation, and Express needs the platform as losses collector, which this platform cannot be |
 | Kyverno `ClusterPolicy` | `ValidatingPolicy` (R20) | The legacy `ClusterPolicy` type is removed in Kyverno 1.20 |
-| Terraform state in the clone | `~/sv-terraform` on the mini, outside any clone | `make rebuild` and Jenkins must share one state |
+| Terraform state in the clone | `~/sv-terraform` on the lab host, outside any clone | `make rebuild` and Jenkins must share one state |
 | BFF `/healthz` checked through `https://<env>.sortedvtg.lan` | Checked in-cluster through the API server proxy | The BFF has no Ingress until its pages arrive in Sprint 2 |
 | `kubectl top` for T032 | Prometheus working-set series | No metrics-server in the cluster; Prometheus also gives 24-hour history |
 

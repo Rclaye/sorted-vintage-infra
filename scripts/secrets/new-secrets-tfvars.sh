@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Writes ~/sv-terraform/secrets.auto.tfvars (git-ignored, mode 600) on the Mac mini, as bot.
+# Writes ~/sv-terraform/secrets.auto.tfvars (git-ignored, mode 600) on the lab host, as bot.
 # Asks for each environment's Stripe test keys without echoing them, and generates everything else:
 #   - the webhook signing secret of each sandbox (stripe listen --print-secret, projects sv-dev and sv-prod)
 #   - one database password per environment and database
@@ -7,8 +7,8 @@
 #   - Garage's RPC secret, admin token and S3 keys, through add-garage-secrets.sh
 #   - Keycloak's admin and database passwords and client secrets, through add-keycloak-secrets.sh
 # Nothing secret is printed. It refuses to overwrite an existing file.
-# From the Air (quoted, so ~ is bot's home on the mini, not yours on the Air):
-#   ssh -t mac-mini-lab '~/Sorted-Vintage/src/sorted-vintage-infra/scripts/secrets/new-secrets-tfvars.sh'
+# From the workstation (quoted, so ~ is bot's home on the lab host, not yours on the workstation):
+#   ssh -t lab '~/Sorted-Vintage/src/sorted-vintage-infra/scripts/secrets/new-secrets-tfvars.sh'
 set -euo pipefail
 umask 077
 
@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${SV_TF_DIR:-$HOME/sv-terraform}/secrets.auto.tfvars"
 mkdir -p "$(dirname "$OUT")" && chmod 700 "$(dirname "$OUT")"
 
-[[ "$(id -un)" == "${SV_LAB_USER:-bot}" ]] || { echo "Run this as ${SV_LAB_USER:-bot} on the mini, not as $(id -un)."; exit 1; }
+[[ "$(id -un)" == "${SV_LAB_USER:-bot}" ]] || { echo "Run this as ${SV_LAB_USER:-bot} on the lab host, not as $(id -un)."; exit 1; }
 [[ ! -e "$OUT" ]] || { echo "$OUT already exists; move it aside first if you mean to replace it."; exit 1; }
 for t in stripe mkcert openssl; do command -v "$t" >/dev/null || { echo "$t is missing (scripts/Brewfile)."; exit 1; }; done
 
@@ -76,4 +76,4 @@ install -m 600 "$TMP/out" "$OUT"
 echo "Wrote $OUT (mode 600). No values were shown."
 "$ROOT/scripts/secrets/add-garage-secrets.sh"
 "$ROOT/scripts/secrets/add-keycloak-secrets.sh"
-echo "The mkcert CA is in $(mkcert -CAROOT); trusting it on the Air is part of docs/runbooks/lab-session.md (T015)."
+echo "The mkcert CA is in $(mkcert -CAROOT); trusting it on the workstation is part of docs/runbooks/lab-session.md (T015)."

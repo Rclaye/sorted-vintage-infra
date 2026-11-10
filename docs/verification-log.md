@@ -24,8 +24,8 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 | 0.2 | ...and, if forced, fails the `checks` workflow | Randomly generated fake AWS-style key ID committed with `--no-verify` on a throwaway branch and PR | Pass: `secret-scan` failed, gitleaks rule `aws-access-token`; GitHub push protection did not block a key ID alone, so gitleaks is the layer that caught it. PR closed unmerged, branch deleted | 2026-11-05 | infra #28 (closed) |
 | 0.2 | A direct push to `main` is rejected | Empty commit pushed to `main` from a throwaway clone, after confirming the ruleset has no bypass actors | Pass: "push declined due to repository rule violations: changes must be made through a pull request"; `main` unchanged | 2026-11-05 | ruleset `protect-main` |
 | 0.2 | All three repos show a green `checks` run on their first PR | First PR in each repo | Pass: `pre-commit` and `secret-scan` green | 2026-10-28 | Sprint 0 retro |
-| 0.3 | `kind version`, `terraform version`, `docker info` succeed on the mini | Ran on the mini | Pass; disk freed from 7.8 GB to 73 GB first | 2026-10-28 | Sprint 0 retro |
-| 0.4 | `ssh mac-mini hostname` succeeds with key login | From the Air | Pass | 2026-10-28 | Sprint 0 retro |
+| 0.3 | `kind version`, `terraform version`, `docker info` succeed on the lab host | Ran on the lab host | Pass; disk freed from 7.8 GB to 73 GB first | 2026-10-28 | Sprint 0 retro |
+| 0.4 | `ssh lab-admin hostname` succeeds with key login | From the workstation | Pass | 2026-10-28 | Sprint 0 retro |
 | 0.5 | Both ADRs merged by PR with green checks; spec, plan and tasks committed | ADRs in `docs/adr/`; Spec Kit workspace merged | Pass | 2026-10-30 | Sprint 0 retro; infra #2 |
 
 ## Sprint 1
@@ -42,7 +42,7 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 
 | Check | How | Result | Date | Evidence |
 | --- | --- | --- | --- | --- |
-| `terraform apply` for `cluster` then `bootstrap` succeeds, and a second plan shows no changes | Applied on the mini as `bot`; plans re-run by the verify script | Pass | 2026-11-02, rechecked 2026-11-05 | infra #7; `verify_sprint1.sh` |
+| `terraform apply` for `cluster` then `bootstrap` succeeds, and a second plan shows no changes | Applied on the lab host as `bot`; plans re-run by the verify script | Pass | 2026-11-02, rechecked 2026-11-05 | infra #7; `verify_sprint1.sh` |
 | Port 443 bound to `127.0.0.1` only | `docker port sorted-vintage-control-plane 443` | Pass (80 too) | 2026-11-05 | `verify_sprint1.sh` |
 | No `*.tfvars` tracked other than the example | `git ls-files` | Pass | 2026-11-05 | `verify_sprint1.sh` |
 
@@ -84,10 +84,10 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 
 | Check | How | Result | Date | Evidence |
 | --- | --- | --- | --- | --- |
-| Jenkins listens on `127.0.0.1:8080` only, as the Air's `ricomillz`, and answers | `netstat` and `ps` (no sudo) from the Air | Pass | 2026-11-05 | `verify_sprint1.sh` (Air mode) |
-| The everyday account cannot read the agent key; the Air's `ricomillz` is not an admin | File read test; `dsmemberutil` | Pass | 2026-11-05 | `verify_sprint1.sh` (Air mode) |
+| Jenkins listens on `127.0.0.1:8080` only, as the workstation's Jenkins account, and answers | `netstat` and `ps` (no sudo) from the workstation | Pass | 2026-11-05 | `verify_sprint1.sh` (workstation mode) |
+| The everyday account cannot read the agent key; the workstation's Jenkins account is not an admin | File read test; `dsmemberutil` | Pass | 2026-11-05 | `verify_sprint1.sh` (workstation mode) |
 | Exactly one job, `infra-terraform`, building `main` only | Defined in `jenkins/casc.yaml`; UI shows the one job | Pass | 2026-11-05 | `casc.yaml`; Jenkins UI |
-| The `mac-mini` agent runs as `bot` (not an admin) and a run shows plan, a paused approval and apply | A `terraform_data` record gave the pipeline a harmless change | Pass: `1 to add`, paused, approved by Richard, applied, `verify` green | 2026-11-05 | infra #25; build #6 |
+| The `lab-host` agent runs as `bot` (not an admin) and a run shows plan, a paused approval and apply | A `terraform_data` record gave the pipeline a harmless change | Pass: `1 to add`, paused, approved by Richard, applied, `verify` green | 2026-11-05 | infra #25; build #6 |
 | A PR to `sorted-vintage-app` shows the SonarQube Cloud quality gate | PR check and bot comment; SonarQube Cloud API | Pass: "Quality Gate passed" | 2026-11-05 | app #4; `verify_sprint1.sh` |
 | Every Jenkins build checks the live lab (T107) | `verify` stage running the sprint's script with `MINI=local` | Pass | 2026-11-05 | infra #23; builds #4–#6 |
 
@@ -95,7 +95,7 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 
 | Check | How | Result | Date | Evidence |
 | --- | --- | --- | --- | --- |
-| `verify_sprint1.sh` passes | From the Air, and on the mini as the Jenkins `verify` stage | Pass | 2026-11-05 | infra #23; builds #4–#6 |
+| `verify_sprint1.sh` passes | From the workstation, and on the lab host as the Jenkins `verify` stage | Pass | 2026-11-05 | infra #23; builds #4–#6 |
 | The retro records measured memory by component next to the plan | Prometheus working sets now and over 24 h | Pass: 6.16 GiB of pods against the plan's 9.5 GB | 2026-11-05 | Sprint 1 retro |
 
 ## Sprint 2
@@ -112,7 +112,7 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 | Check | How | Result | Date | Evidence |
 | --- | --- | --- | --- | --- |
 | A PR adding a Gradle service shows build, Trivy and the SonarQube Cloud quality gate; after merge its dev tag reaches gitops with no manual step | The Listings PRs, the first Gradle service | Pass: build, image start check, Trivy and quality gate green on app #7; the dev tag PRs (gitops #28, #29) opened and auto-merged | 2026-11-07 | app #5, #6, #7; gitops #28, #29 |
-| `https://dev.sortedvtg.lan:8443/healthz` answers 200 from the Air's browser through the tunnel | Richard in the Air's browser; also curl through the tunnel with the mkcert CA, dev and prod | Pass: `{"status":"ok"}`; certificate `*.sortedvtg.lan` verified | 2026-11-06 | gitops #22 |
+| `https://dev.sortedvtg.lan:8443/healthz` answers 200 from the workstation's browser through the tunnel | Richard in the workstation's browser; also curl through the tunnel with the mkcert CA, dev and prod | Pass: `{"status":"ok"}`; certificate `*.sortedvtg.lan` verified | 2026-11-06 | gitops #22 |
 | `infra-terraform` stays green with `sprints/sprint-2/` present and no `verify_sprint2.sh` | Jenkins builds after the Sprint 2 folder landed | Pass: `verify` chose `verify_sprint1.sh` and passed | 2026-11-07 | Jenkins builds on `f884254` and `5e65fc0` |
 | A client setting changed in a realm file reaches the live `sv-dev` realm after one sync, with no admin-console edit | Added the `seed` client to `sv-dev.json`; Argo CD synced `keycloak`, the PostSync Job ran; checked with kcadm | Pass: `seed` present with only `view-users` and `manage-users`, secret equal to the Terraform value, `sv-prod` and other clients unchanged; Job took 28 s | 2026-11-07 | gitops #24 (Job: #22; secrets: infra #33); spike runs 2 and 3 in `spikes.md` |
 

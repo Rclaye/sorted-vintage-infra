@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# T080 (ADR-0002): the human gate for prod on the GitOps repo. Idempotent; run from the Air as the
+# T080 (ADR-0002): the human gate for prod on the GitOps repo. Idempotent; run from the workstation as the
 # repo owner, after the gitops prod-gate workflow is on main:
 #   1. GitHub Environment "prod" with the owner as required reviewer. Self-review is allowed,
 #      because this is a one-person project and the owner also starts promotions and reverts.
