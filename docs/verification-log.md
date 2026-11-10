@@ -122,3 +122,12 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 | --- | --- | --- | --- | --- |
 | `listings-dev` and `listings-prod` are Synced and Healthy; `/healthz` answers in both namespaces; Flyway reports V1 applied | Argo CD status; `/healthz` through the API server proxy; `flyway_schema_history` in each `listings` database | Pass: 1 pod each, 0 restarts; `{"status":"UP"}`; `1 listings true` in dev and prod | 2026-11-07 | gitops #26, #29, #31, #32 |
 | Its metrics appear in Prometheus and a request's trace in Tempo | Prometheus `up` and `jvm_memory_used_bytes` for the `listings` Service; Tempo search `service.name=listings` | Pass (dev): target up, JVM metrics present; traces found | 2026-11-07 | gitops #33 (Tempo fixed first) |
+
+### Ticket 2.4: Listings features: drafts, photos, search, seller profile
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| T033 passes in CI, with the SonarQube Cloud gate green | App CI `build listings` (`./gradlew build`: contract tests on Testcontainers Postgres and Garage); SonarQube Cloud on the pull request | Pass: 48 tests pass, 5 publish tests skipped until T046; quality gate passed with 0 new issues, 0 hotspots and 0 dependency risks | 2026-11-10 | app #9 |
+| A `.txt` renamed to `.jpg` gets 415 `photo_type_rejected` and an 11 MB image 413 `photo_too_large`; neither leaves an object in Garage | `ListingsContractTest` (`textRenamedToJpgIs415AndLeavesNothingBehind`, `elevenMegabytesIs413AndLeavesNothingBehind`), which list the bucket and count photo rows after each upload; run on the lab host and in CI | Pass: 415 and 413 with the contract's body; no object under the listing's prefix and no photo row | 2026-11-10 | app #9 |
+| The new Listings runs in `sv-dev` and its public routes answer as the contract says | Argo CD status after the dev-tag PR; requests through a port-forward to the `listings` Service | Pass: Synced and Healthy, 0 restarts, no warning or error logs; `GET /listings` 200 `{"items":[],"next_cursor":null}`; `limit=61` and an unknown category 422; an unknown listing or seller 404; `POST /listings` without a token 401 | 2026-11-10 | app #9, gitops #34 |
+| Partial: create a listing and upload a photo in `sv-dev` | Needs a seller token; scripts get one through the BFF login form (Sprint 2 spikes, script token), which T047 and T048 add | Open until Ticket 2.6; the contract tests cover these routes against real Postgres and Garage meanwhile | | |
