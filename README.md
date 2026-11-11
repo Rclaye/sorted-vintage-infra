@@ -2,7 +2,7 @@
 
 A peer-to-peer resale marketplace running on a Kubernetes platform that is built, changed and rebuilt only from Git. The marketplace is the workload; the platform is the project. Its goal, over six projects, is a platform that detects, diagnoses and safely fixes its own incidents, with every AI claim scored against labeled failures.
 
-**Status (2026-11-11):** Project 1 of 6 (the marketplace and its platform), Sprint 2 of 3, 62 of 123 tasks done. The platform and delivery path are running; three of five services are deployed. The AIOps work starts in Project 2 and is not built yet.
+**Status (2026-11-11):** Project 1 of 6 (the marketplace and its platform), Sprint 2 of 3, 65 of 124 tasks done. The platform and delivery path are running; three of five services are deployed. The AIOps work starts in Project 2 and is not built yet.
 
 | Repo | Role |
 | --- | --- |

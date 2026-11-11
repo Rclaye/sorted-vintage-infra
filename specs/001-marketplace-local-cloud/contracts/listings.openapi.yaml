@@ -126,6 +126,20 @@ paths:
                   sold_count: { type: integer }
                   available: { type: array, items: { $ref: "#/components/schemas/Listing" } }
                   sold: { type: array, items: { $ref: "#/components/schemas/Listing" } }
+                  drafts:
+                    type: array
+                    items: { $ref: "#/components/schemas/Listing" }
+                    description: "Only when the caller is this seller (the BFF's /sell page); absent otherwise"
+  /photos/listings/{listing_id}/{photo_id}:
+    get:
+      summary: A stored photo's bytes, which the BFF forwards to browsers (Garage is in-cluster only)
+      security: []
+      parameters:
+        - { name: listing_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: photo_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "The image; public and cacheable for a published listing, no-store for a draft's (seller only)" }
+        "404": { description: "Unknown, not stored yet, deleted, or a draft's photo for anyone but its seller" }
   /listings/{listing_id}/reservations:
     post:
       summary: Reserve an available listing for 10 minutes (FR-009). Called by Orders with the buyer's token.
