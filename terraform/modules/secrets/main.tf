@@ -270,3 +270,27 @@ resource "kubernetes_secret_v1" "dev_verify_seller" {
     password = random_password.dev_verify_seller.result
   }
 }
+
+# The BFF's cookie key (T047, decided 2026-11-11): the BFF keeps each user's session (Keycloak
+# tokens) encrypted in its HTTP-only cookie, so it needs no session store and works across
+# replicas. One key per environment, so a dev cookie never opens in prod. Generated here like
+# Grafana's admin password, so secrets.auto.tfvars does not change. Replacing it signs everyone out.
+resource "random_password" "bff_session" {
+  for_each = local.env_names
+
+  length  = 48
+  special = false
+}
+
+resource "kubernetes_secret_v1" "bff_session" {
+  for_each = local.env_names
+
+  metadata {
+    name      = "bff-session"
+    namespace = kubernetes_namespace_v1.env[each.key].metadata[0].name
+  }
+
+  data = {
+    "cookie-key" = random_password.bff_session[each.key].result
+  }
+}
