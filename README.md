@@ -2,7 +2,7 @@
 
 A peer-to-peer resale marketplace running on a Kubernetes platform that is built, changed and rebuilt only from Git. The marketplace is the workload; the platform is the project. Its goal, over six projects, is a platform that detects, diagnoses and safely fixes its own incidents, with every AI claim scored against labeled failures.
 
-**Status (2026-11-10):** Project 1 of 6 (the marketplace and its platform), Sprint 2 of 3, 55 of 123 tasks done. The platform and delivery path are running; two of five services are deployed. The AIOps work starts in Project 2 and is not built yet.
+**Status (2026-11-11):** Project 1 of 6 (the marketplace and its platform), Sprint 2 of 3, 62 of 123 tasks done. The platform and delivery path are running; three of five services are deployed. The AIOps work starts in Project 2 and is not built yet.
 
 | Repo | Role |
 | --- | --- |
@@ -38,7 +38,7 @@ No pipeline holds cluster credentials. CI can only write to Git, Argo CD is the 
 
 - **Platform, all from Git:** Argo CD (30 applications, all Synced and Healthy), Traefik, cert-manager, Kyverno, Keycloak with realms applied from Git, CloudNativePG Postgres with WAL archiving and scheduled backups, RabbitMQ, Garage (S3), Prometheus, Grafana, Alertmanager, Loki, Tempo and an OpenTelemetry Collector.
 - **Environments:** `sv-dev` and `sv-prod`, each with its own data stores, generated from the gitops folder layout by an ApplicationSet.
-- **Services:** `bff` (FastAPI) and `listings` (Spring Boot) in dev and prod, each with health and metrics endpoints, JSON logs and traces. Orders, payments and notifications come in Sprint 3.
+- **Services:** `bff` (FastAPI) and `listings` (Spring Boot) in dev and prod, and `payments` (FastAPI, Stripe Connect onboarding on Accounts v2) in dev, each with health and metrics endpoints, JSON logs and traces. A Stripe CLI forwarder relays Stripe's test events into each environment from inside, so no inbound port is opened. Orders and notifications come in Sprint 3.
 - **Hardware and cost:** one 16 GB arm64 machine, $0 recurring ([ADR-0001](docs/adr/0001-local-kind-instead-of-eks.md)).
 
 ## Measured so far
