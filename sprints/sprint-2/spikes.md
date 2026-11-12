@@ -113,7 +113,7 @@ Results of the spikes in Ticket 2.1, run on 2026-11-05 on the lab host as `bot` 
 | `GET dev…/sell` | 200, signed in, `sv_session` cookie held |
 | Delete the temporary user | 204 |
 
-- TLS was verified with hostname checking on: the pod trusted the certificate Traefik serves (OpenSSL partial-chain), so no mkcert root goes into the cluster or the repos.
+- TLS, corrected 2026-11-12: the spike pod fetched the certificate from Traefik and then trusted it, which checks the hostname but not who answers. The seed job instead pins the lab certificate Terraform publishes as ConfigMap `lab-tls-cert` in `sv-dev` (OpenSSL partial chain, hostname checking on), so no mkcert root goes into the cluster or the repos.
 - Kyverno's `require-resources` refuses a pod without CPU and memory requests and limits; the seed Job needs both.
 - `sv-dev` has no NetworkPolicy, so the pod reached Traefik and `keycloak-http` without changes.
 - For the seed job: sign each seller in this way, then create listings through the BFF's selling pages (the access token stays inside the encrypted session cookie). Label its pods `lab-live=true` so the workstation's live pane follows them.

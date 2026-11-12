@@ -88,6 +88,20 @@ resource "kubernetes_secret_v1" "tls" {
   }
 }
 
+# sv-dev only (T051, Sprint 2 spike "In-cluster sign-in"): the public half of the certificate
+# above, so the seed job can reach https://*.sortedvtg.lan through Traefik and trust only this
+# certificate (pinned). A certificate is public; the key stays in the traefik namespace.
+resource "kubernetes_config_map_v1" "dev_lab_tls_cert" {
+  metadata {
+    name      = "lab-tls-cert"
+    namespace = kubernetes_namespace_v1.env["dev"].metadata[0].name
+  }
+
+  data = {
+    "tls.crt" = nonsensitive(var.tls_certificate)
+  }
+}
+
 # Garage per environment (research R19): the server's RPC secret and admin token, and one S3 key
 # per consumer. The setup Job imports the keys, so a rebuilt instance keeps the same credentials.
 resource "kubernetes_secret_v1" "garage_admin" {
