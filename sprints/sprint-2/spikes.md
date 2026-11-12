@@ -97,3 +97,23 @@ Results of the spikes in Ticket 2.1, run on 2026-11-05 on the lab host as `bot` 
 | Existing user kept through every run; same file again changes nothing | yes |
 
 - Terraform must create `SV_DEV_SEED_SECRET` before the realm file refers to it, so the infra change is applied first.
+
+## In-cluster sign-in (T051, T115)
+
+**2026-11-12, pass, in the lab's `sv-dev`.** The question: can a pod drive the BFF login form, when the browser's addresses (`https://auth.sortedvtg.lan:8443`, `https://dev.sortedvtg.lan:8443`) only exist on the workstation through the SSH tunnel? A throwaway pod ran the BFF image already on the node (no pull), with `hostAliases` pointing both names at Traefik's ClusterIP and the script changing port 8443 to 443. The names stay the same, so Keycloak's fixed issuer, the BFF's `PUBLIC_BASE_URL` redirect and the cookies all match what a browser sees. A temporary user `spike-signin` was created with the `seed` client and deleted at the end (in a `finally`, so also on failure).
+
+| Step | Result |
+| --- | --- |
+| `seed` token on the in-cluster URL (client credentials) | 200 |
+| Create the temporary user | 201 |
+| `GET dev…/login` | 303 to Keycloak's authorize URL |
+| `GET auth…/openid-connect/auth` | 200, login form, action on `auth.sortedvtg.lan:8443` |
+| `POST …/login-actions/authenticate` | 302 to `dev…/auth/callback` |
+| `GET dev…/auth/callback` | 303 to `/sell` (the `next` path; a failure goes to `/`) |
+| `GET dev…/sell` | 200, signed in, `sv_session` cookie held |
+| Delete the temporary user | 204 |
+
+- TLS was verified with hostname checking on: the pod trusted the certificate Traefik serves (OpenSSL partial-chain), so no mkcert root goes into the cluster or the repos.
+- Kyverno's `require-resources` refuses a pod without CPU and memory requests and limits; the seed Job needs both.
+- `sv-dev` has no NetworkPolicy, so the pod reached Traefik and `keycloak-http` without changes.
+- For the seed job: sign each seller in this way, then create listings through the BFF's selling pages (the access token stays inside the encrypted session cookie). Label its pods `lab-live=true` so the workstation's live pane follows them.
