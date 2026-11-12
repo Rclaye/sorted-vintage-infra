@@ -67,6 +67,7 @@ module "secrets" {
   environments    = var.environments
   garage          = var.garage
   keycloak        = var.keycloak
+  seed_sellers    = var.seed_sellers
   tls_certificate = var.tls_certificate
   tls_private_key = var.tls_private_key
 }
@@ -108,6 +109,13 @@ variable "keycloak" {
     clients        = map(map(string))
   })
   sensitive = true
+}
+
+variable "seed_sellers" {
+  description = "sv-dev demo sellers for the seed job (T051): seller key => id of the Stripe test account onboarded by hand for that seller. Set in secrets.auto.tfvars; empty until the accounts exist."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
 }
 
 variable "tls_certificate" {

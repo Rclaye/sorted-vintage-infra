@@ -72,3 +72,23 @@ variable "keycloak" {
     error_message = "Keycloak needs admin and database passwords of 32+ characters and a 32+ character secret for bff, orders, payments and listings in both dev and prod."
   }
 }
+
+variable "seed_sellers" {
+  description = "sv-dev demo sellers for the seed job (T051): seller key (the email's local part, e.g. demo-seller-1 or verify-seller) => the id of the Stripe test account onboarded by hand for that seller. Empty until the accounts exist."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+
+  validation {
+    condition = alltrue([
+      for key, account in var.seed_sellers :
+      can(regex("^[a-z0-9][a-z0-9-]{1,40}$", key)) && can(regex("^acct_[A-Za-z0-9]{8,64}$", account))
+    ])
+    error_message = "Each seed seller needs a key of lowercase letters, digits and hyphens, and a Stripe account id of the form acct_..."
+  }
+
+  validation {
+    condition     = length(distinct(values(var.seed_sellers))) == length(var.seed_sellers)
+    error_message = "Each seed seller needs its own Stripe account: an account id appears twice."
+  }
+}

@@ -271,6 +271,43 @@ resource "kubernetes_secret_v1" "dev_verify_seller" {
   }
 }
 
+# sv-dev only (T051, decided 2026-11-11): the demo sellers the seed job creates, and the Stripe
+# test account each one is linked to. Stripe will not let the platform accept its terms for a
+# seller (Ticket 2.1), so every account was onboarded once by hand and its id is kept in
+# secrets.auto.tfvars, out of the public repos. A seller's email is <key>@sortedvtg.lan. Demo
+# sellers get a generated password; the verify seller keeps the one in Secret verify-seller.
+locals {
+  seed_seller_keys = toset(nonsensitive(keys(var.seed_sellers)))
+  verify_seller    = "verify-seller"
+}
+
+resource "random_password" "seed_seller" {
+  for_each = setsubtract(local.seed_seller_keys, [local.verify_seller])
+
+  length  = 32
+  special = false
+}
+
+resource "kubernetes_secret_v1" "seed_sellers" {
+  metadata {
+    name      = "seed-sellers"
+    namespace = kubernetes_namespace_v1.env["dev"].metadata[0].name
+  }
+
+  data = {
+    "sellers.json" = jsonencode([
+      for key in sort(local.seed_seller_keys) : {
+        key               = key
+        email             = "${key}@sortedvtg.lan"
+        stripe_account_id = var.seed_sellers[key]
+        password = (key == local.verify_seller
+          ? random_password.dev_verify_seller.result
+        : random_password.seed_seller[key].result)
+      }
+    ])
+  }
+}
+
 # The BFF's cookie key (T047, decided 2026-11-11): the BFF keeps each user's session (Keycloak
 # tokens) encrypted in its HTTP-only cookie, so it needs no session store and works across
 # replicas. One key per environment, so a dev cookie never opens in prod. Generated here like
