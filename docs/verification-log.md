@@ -10,7 +10,7 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 
 | Ticket | Check | Why open | When |
 | --- | --- | --- | --- |
-| (none) | Every Sprint 2 check up to Ticket 2.6 has run; the 2.1 registration email passed on 2026-11-11 (Ticket 2.6 row below) | | |
+| (none) | Every Sprint 2 check has run; Sprint 2 closed on 2026-11-12 (Tickets 2.7 and 2.8 below) | | |
 
 The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 1.4) were run on 2026-11-05; see their rows below.
 
@@ -150,4 +150,24 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 | Quickstart step 2 by hand in dev, with times (SC-001): onboarding under 5 minutes, publishing after onboarding under 2 minutes, the listing in browse within 5 seconds | Richard in the workstation's browser on `https://dev.sortedvtg.lan:8443`, with a stopwatch; server times from Keycloak, Payments, Listings and Mailpit | Pass: sign-up with the verification email in Mailpit (01:51:40 UTC), signed in 01:52:31; onboarding about 4 minutes by stopwatch (account created 01:53:04, `ready` 01:56:55, 4 seconds after Stripe's last events thanks to the second read from app #11); listing under 2 minutes by stopwatch (draft 01:57:58, published 01:59:33); in browse at once (published and available in one transaction) | 2026-11-11 | app #11, #12, #14; gitops #45, #46 |
 | A registration email from the live `sv-dev` realm reaches Mailpit (open since Ticket 2.1) | The walkthrough's sign-up; Mailpit's API read on the lab host | Pass: "Verify email" received 01:51:40 UTC; the link signed the user in | 2026-11-11 | gitops #45 |
 | Sign-in is safe against the usual mistakes | BFF tests: forged `state`, a token for another client, a replayed nonce, a tampered cookie, refresh and a refused refresh, CSRF on forms and logout, off-site `next`, HTML escaping, photo paths | Pass: all covered in `tests/test_signin.py` and `tests/test_pages.py`; Content-Security-Policy `'self'` only (form-action also Stripe), `X-Frame-Options: DENY`, checked live from the workstation | 2026-11-11 | app #14 |
-| Partial: the timed check that a published listing is in browse within 5 seconds, automated (T113) | Belongs in `verify_sprint2.sh` (T115, Ticket 2.7) | Open: shown by hand above | | |
+| The timed check that a published listing is in browse within 5 seconds, automated (T113) | `verify_sprint2.sh` (Ticket 2.8 below) | Pass: automated in Ticket 2.8 | 2026-11-12 | infra #47 |
+
+### Ticket 2.7: seed data
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| A pod can sign in through the BFF login form (spike) | Throwaway pod in `sv-dev`: names sent to Traefik's Service, a temporary user made with the `seed` client and deleted after | Pass: `/login` 303, Keycloak form 200, credentials 302, callback 303 to `/sell`, `/sell` 200 signed in; user deleted 204. TLS then trusted what Traefik served; the job pins the Terraform certificate instead | 2026-11-12 | [spikes.md](../sprints/sprint-2/spikes.md#in-cluster-sign-in-t051-t115), infra #45, #46 |
+| Only the `seed` client may link a seller to a Stripe account, and only in dev | Payments tests; live: a `seed` token on `PUT /connected-accounts/{sub}` in dev | Pass: 15 new tests (404 unless `ACCOUNT_LINK_AZP` is set, 403 for other clients); live token carries `aud: payments`, the route answered 422 to an empty body (past 404 and 403) | 2026-11-12 | app #15, gitops #48 |
+| After a sync, browse in dev shows 50 seeded listings | `seed-dev` synced; Job log; Listings search read from a pod | Pass: Job succeeded on its first try, demo sellers linked with payouts `ready`, verify seller created unlinked; search held 51 listings, the 50 seeded (`#01`–`#50`, 25 per demo seller) each with a photo, plus the walkthrough's | 2026-11-12 | app #16, gitops #52, infra #44, #46 |
+| Running the hook again changes nothing | Seed tests: a second run only fills gaps; a seller already present is updated, not created | Pass in tests (13 tests, 87% coverage); a second run in the lab not yet seen | 2026-11-12 | app #16 |
+| The verify seller is onboarded once by hand and its id kept out of Git | Richard on `/sell/onboarding` with Stripe's test values; id read from Payments' database and added to `seed_sellers` on the lab host | Pass: payouts `ready`, account `active`/`active`; Jenkins apply put it in Secret `seed-sellers` | 2026-11-12 | this log; `secrets.auto.tfvars` on the lab host |
+
+### Ticket 2.8: verify and measure
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| `verify_sprint2.sh` passes from the workstation, after `verify_sprint1.sh` | Run from the workstation, twice | Pass: 72 checks, Sprint 1 and Sprint 2; one skip (`/webhooks/stripe` is Sprint 3) | 2026-11-12 | infra #47 |
+| Bad Stripe signatures refused | Unsigned POST to Payments `/webhooks/stripe-connect` through the API server, `sv-dev` and `sv-prod` | Pass: 400 in both | 2026-11-12 | infra #47 |
+| A scripted listing by the verify seller is in search within 5 seconds, then deleted; bad photo type and size refused (T113) | `verify_selling.sh` on the lab host: sign-in through the BFF form, renamed `.txt`, 11 MB image, two photos, publish, search polled every 0.25 s, delete | Pass: 415 `photo_type_rejected`, 413 `photo_too_large`; in search 0.05 s after publishing; after delete 404 and gone from search | 2026-11-12 | infra #47, app #17 |
+| The Jenkins `verify` stage runs Sprint 2's checks, read-only | `infra-terraform` build after infra #47 (apply of `seed-sellers`, then verify with `MINI=local`) | Pass as reported by Richard; the build page needs a sign-in, so it was not read from here | 2026-11-12 | Jenkins `infra-terraform` |
+| Memory re-measured with the services running (T119) | Prometheus working sets through the API server proxy, as T032; `docker stats`; `memory_pressure` | Pass: pods 8.29 GiB (24 h median 7.96, p95 8.37, peak 8.81), node 9.28 of 11.91 GiB, lab host 55% free | 2026-11-12 | [sprint2_retro.md](../sprints/sprint-2/sprint2_retro.md#memory-measured-again-t119) |
