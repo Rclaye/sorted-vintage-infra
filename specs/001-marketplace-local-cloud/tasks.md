@@ -16,7 +16,7 @@
 
 **Task IDs**: T103–T107 were added after generation and placed where they run. They are numbered after T102 so that existing references stay valid. T108–T114 come from convergence (Phase 11); T115–T120 were added when Sprint 2 was planned (2026-11-05) and sit at the end of Phase 3. T121–T123 were added on 2026-11-09 after a portfolio review: T122 in Phase 6, T123 in Phase 7 and T121 in Phase 10.
 
-**Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 (US1) and T113, T115–T120 = Sprint 2 · Phase 4 (US2) through Phase 9 and T125 = Sprint 3 · Phase 10 = Gate 1 release · T124 after Sprint 3. Re-scoped 2026-11-05: Sprint 2 is User Story 1 only, so a whole story is finished and verified before the next starts; US2 moves to Sprint 3 with the purchase checks of T075 ([sprint2.md](../../sprints/sprint-2/sprint2.md)).
+**Sprint mapping**: Phases 1–2 and T080 = Sprint 1 · Phase 3 (US1) and T113, T115–T120 = Sprint 2 · Phase 4 (US2), T083 and T113 = Sprint 3 · Phases 5 to 9 (except T083), T110, T114, T125 and Phase 10 (Gate 1 release, T100 as `verify_sprint4.sh`) = Sprint 4 · T124 after Sprint 4. Split 2026-11-12 ([sprint3.md](../../sprints/sprint-3/sprint3.md)): User Story 2 is built and verified before the operational stories. Re-scoped 2026-11-05: Sprint 2 is User Story 1 only, so a whole story is finished and verified before the next starts; US2 moves to Sprint 3 with the purchase checks of T075 ([sprint2.md](../../sprints/sprint-2/sprint2.md)).
 
 ---
 
@@ -218,7 +218,7 @@
 
 - [ ] T088 [US6] Locust generator in `app/tools/traffic/locustfile.py`: browse, search, list and buy tasks through the BFF routes; purchases confirm the PaymentIntent server-side with `pm_card_visa`, and a configurable share with `pm_card_chargeDeclined` ([research R6](./research.md#r6-payment-ui-and-synthetic-purchases))
 - [ ] T089 [US6] `LoadTestShape` in `app/tools/traffic/shape.py` following a daily-shaped curve, with `BASE_RPS`, `PEAK_RPS` and `CYCLE_MINUTES` (default 120) from environment variables (FR-022)
-- [ ] T090 [US6] Synthetic user pool: extend the seed job in `app/tools/seed/` to create 50 synthetic buyers and sellers in each realm, with credentials in a generated Secret the generator reads
+- [ ] T090 [US6] Synthetic user pool: extend the seed job in `app/services/seed/` to create 50 synthetic buyers and sellers in each realm, with credentials in a generated Secret the generator reads (path updated 2026-11-12: the seed job lives in `services/seed`, T051)
 - [ ] T091 [US6] Deploy the generator headless in `gitops/services/traffic/{base,overlays/dev,overlays/prod}`, with rates in each overlay's ConfigMap (lower in dev)
 
 ---
@@ -244,7 +244,7 @@
 - [ ] T097 [P] Policy proof for SC-010 ([quickstart step 6](./quickstart.md#6-policy-holds-by-every-route-sc-010-fr-027)), recorded in `infra/sprints/sprint-3/evidence.md`
 - [ ] T098 Run the full rebuild drill through Jenkins (T077), confirm SC-004, and record the time in `infra/docs/runbooks/rebuild.md`
 - [ ] T099 Build Listings in Jenkins as well as GitHub Actions (Jenkins builds run on the lab host agent; the controller on the workstation runs none); collect build time, setup effort and failure handling for the comparison article
-- [ ] T100 Write `infra/sprints/sprint-3/verify_sprint3.sh` covering SC-001 to SC-010 where automatable
+- [ ] T100 Write `infra/sprints/sprint-4/verify_sprint4.sh` (moved from `verify_sprint3.sh` when Sprint 3 was split, 2026-11-12; it runs `verify_sprint3.sh` first) covering SC-001 to SC-010 where automatable
 - [ ] T101 [P] Write ADRs in `infra/docs/adr/`: 0003 (Stripe Connect through the CLI forwarder, one sandbox per environment), 0004 (namespaces, not clusters), 0005 (CloudNativePG with the Barman Cloud Plugin over Crossplane), 0006 (policy in CI and at admission), 0007 (single-node Kind, and the temporary SSH-only access until Tailscale)
 - [ ] T102 Write the Gate 1 case study and the "Jenkins or GitHub Actions?" article in `infra/docs/case-studies/`
 - [ ] T121 Front-door README for reviewers in `infra/README.md`: what the platform is in two sentences, one diagram taken from the lab map view, a table of measured results that links each number to its row in `infra/docs/verification-log.md` (rebuild time, start time, policy rejections, p95 checkout, trace coverage), screenshots in `infra/docs/img/` (Argo CD applications, one Grafana dashboard, one purchase trace), a link to a 2–3 minute recorded walkthrough of a change going from commit to prod, and a "start here" list; move the current layout and setup text below it. Add a short pointer to it at the top of `app/README.md` and `gitops/README.md`, and set a description and topics on the three GitHub repositories. A first version can ship as soon as User Story 1 works in a browser; refresh the numbers with T102. The "how this was built" section is separate and stays parked
