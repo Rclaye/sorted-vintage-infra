@@ -63,6 +63,12 @@ Build the version 1 marketplace (accounts, listings with photos, buy-now checkou
 
 If the measured total exceeds 11 GB, dev services scale to zero when not in use before anything else is cut.
 
+**Measured and projected (2026-11-12, decided with Richard).** Pods measured 6.16 GiB at the end of Sprint 1 and 8.29 GiB at the end of Sprint 2 (node container 9.28 of 11.91 GiB; [sprint2_retro.md](../../sprints/sprint-2/sprint2_retro.md#memory-measured-again-t119)). What is left for Project 1, sized from the measured services: Orders and Notifications in two environments about +0.35 GiB, the Locust generator (T088, dev only, during sessions) +0.15 to 0.25, Loki, Tempo and Prometheus under steady traffic +0.3 to 0.5, Argo CD notifications (T086, T114) about +0.05, and the log shipper (T125) +0.2 to 0.4. That puts pods near 9.2 to 9.5 GiB median and 10 GiB at the 95th percentile: under the 11 GB line, but with the node container near 10.5 of 11.9 GiB, where the overlap during restarts matters.
+
+- **When to measure:** after Orders and Notifications land, after the traffic generator, and after the log shipper; each time as T032 and T119 did.
+- **Trigger:** pods' 95th percentile over 10 GiB at any of those points.
+- **Levers, in this order, before scaling dev to zero:** a fixed heap for Listings in prod (it is half of all service memory; about 100 to 150 MiB per environment), prod BFF at 1 replica instead of 2 (about 50 MiB), shorter Loki, Tempo and Prometheus retention, then Docker Desktop at 13 GB instead of 12 (the lab host had 55% free with the lab up; a change to this plan's constraint, so Richard decides it at the time, and Ollama stays off during sessions).
+
 ## Constitution Check
 
 *GATE: must pass before research; re-checked after design.*
