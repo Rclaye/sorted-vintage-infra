@@ -50,7 +50,7 @@ Implementation Requirements:
 Acceptance Criteria Verification:
 - Each spike has a result in `spikes.md` (pass, or the design change it forces) before the ticket that depends on it starts.
 
-Ticket 3.2 — Contract Tests First (T053–T058)
+Ticket 3.2 — Contract Tests First (T053–T057)
 Owner: Application Engineer
 Repos: app
 Story: As the team, we write down how the services talk to each other before writing the services.
@@ -58,7 +58,8 @@ Story: As the team, we write down how the services talk to each other before wri
 Implementation Requirements:
 - T053 reservation routes in Listings, including two concurrent `POST /listings/{id}/reservations` where exactly one returns 201.
 - T054 Orders contract (`Idempotency-Key` replay, 403 `own_listing`, `payment-result` replay on a final order); T055 Payments contract with `stripe-mock`; T056 the ledger property test (R7); T057 the message contract, where a redelivered `event_id` sends no second email.
-- T058 the double-sell load test (`make loadtest-double-sell ENV=dev`), written now, run in Ticket 3.8.
+- T058, the double-sell load test, moved to Ticket 3.8 (decided 2026-11-13): it needs a scripted buyer who can pay, which depends on the checkout built in Ticket 3.7, and reuses `verify_sprint3.sh`'s scripted purchase.
+- Tests that land before their code are strict xfails (pytest) or `@Pending` (JUnit), naming the task that will make them pass; a test that starts passing fails CI until its marker is removed. Orders and Notifications are generated from the template here (the first step of T061 and T071), so CI runs their tests.
 
 Acceptance Criteria Verification:
 - The tests exist and fail for the right reason (the routes are missing), and CI runs them on each PR.
@@ -127,13 +128,14 @@ Implementation Requirements:
 Acceptance Criteria Verification:
 - Quickstart step 3 by hand in dev: a purchase from a seeded listing ends `paid` and both emails are in Mailpit; a declined card shows an error and the listing stays available.
 
-Ticket 3.8 — Verify and Measure (T075, T113 in `verify_sprint3.sh`, memory checkpoint 1)
+Ticket 3.8 — Verify and Measure (T058, T075, T113 in `verify_sprint3.sh`, memory checkpoint 1)
 Owner: Platform Engineer
 Repos: infra (`sprints/sprint-3`, `docs/verification-log.md`)
 Story: As the platform owner, I want User Story 2 checked by a script on every Jenkins build, and the memory budget measured with the new services running.
 
 Implementation Requirements:
 - `sprints/sprint-3/verify_sprint3.sh` runs `verify_sprint2.sh` first. Reads, in both modes: Orders and Notifications health in both namespaces, the RabbitMQ topology present, the forwarder's platform session answered 200. From the workstation only (writes to `sv-dev`): T075, a scripted purchase with `pm_card_visa` that ends `paid` with a balanced ledger and two emails in Mailpit, `pm_card_chargeDeclined` releasing the item, and T058 reporting zero double sales; the 5-second browse check (T113) carried over. Prod is read only.
+- T058 the double-sell load test (`make loadtest-double-sell ENV=dev`), written here on top of the scripted purchase.
 - Memory checkpoint 1 as T032 and T119 did; pull the levers in plan.md if pods' 95th percentile is over 10 GiB.
 - `sprint3_retro.md`, the verification-log rows, the handoff and the lab map.
 

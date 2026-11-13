@@ -143,7 +143,7 @@
 - [ ] T055 [P] [US2] Contract tests for `POST /payment-intents`, `POST /payment-intents/{id}/cancel`, `POST /webhooks/stripe` and `GET /orders/{order_id}/ledger` in `app/services/payments/tests/contract/test_payments.py`, using `stripe-mock` for the Stripe API
 - [ ] T056 [P] [US2] Ledger property test in `app/services/payments/tests/unit/test_ledger.py`: for amounts 100–1,000,000 and fee percentages 0–100, `platform = round_half_up(amount × fee_pct / 100)`, `seller = amount − platform`, and the two always sum to the amount ([research R7](./research.md#r7-money-arithmetic-and-the-ledger))
 - [ ] T057 [P] [US2] Message contract test in `app/services/notifications/tests/contract/test_orders_events.py` validating consumed messages against [contracts/orders-events.asyncapi.yaml](./contracts/orders-events.asyncapi.yaml) and asserting a redelivered `event_id` sends no second email
-- [ ] T058 [P] [US2] Double-sell load test in `app/tests/load/double_sell.py` (k6 or Locust): 1,000 simultaneous purchase attempts across 100 items, then query Orders and fail if any listing has more than one `paid` order (SC-003); expose it as `make loadtest-double-sell ENV=dev` in `app/Makefile`
+- [ ] T058 [P] [US2] Double-sell load test in `app/tests/load/double_sell.py` (k6 or Locust): 1,000 simultaneous purchase attempts across 100 items, then query Orders and fail if any listing has more than one `paid` order (SC-003); expose it as `make loadtest-double-sell ENV=dev` in `app/Makefile` (written in Ticket 3.8 rather than 3.2, decided 2026-11-13: it needs the scripted purchase that `verify_sprint3.sh` builds)
 
 ### Implementation for User Story 2
 
