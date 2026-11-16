@@ -11,6 +11,8 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 | Ticket | Check | Why open | When |
 | --- | --- | --- | --- |
 | (none) | Every Sprint 2 check has run; Sprint 2 closed on 2026-11-12 (Tickets 2.7 and 2.8 below) | | |
+| 3.1–3.3 | Rows for the spikes, the contract tests written first and Listings reservations | Those tickets closed before their rows were added; the evidence is in `sprints/sprint-3/spikes.md`, app #18 and #19, infra #51 and #52 | At Sprint 3 close |
+| 3.4 | A live order: its state change and its event seen together in sv-dev | Orders is not deployed until Ticket 3.7; checked in tests only so far | Ticket 3.7 |
 
 The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 1.4) were run on 2026-11-05; see their rows below.
 
@@ -171,3 +173,15 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 | A scripted listing by the verify seller is in search within 5 seconds, then deleted; bad photo type and size refused (T113) | `verify_selling.sh` on the lab host: sign-in through the BFF form, renamed `.txt`, 11 MB image, two photos, publish, search polled every 0.25 s, delete | Pass: 415 `photo_type_rejected`, 413 `photo_too_large`; in search 0.05 s after publishing; after delete 404 and gone from search | 2026-11-12 | infra #47, app #17 |
 | The Jenkins `verify` stage runs Sprint 2's checks, read-only | `infra-terraform` build after infra #47 (apply of `seed-sellers`, then verify with `MINI=local`) | Pass as reported by Richard; the build page needs a sign-in, so it was not read from here | 2026-11-12 | Jenkins `infra-terraform` |
 | Memory re-measured with the services running (T119) | Prometheus working sets through the API server proxy, as T032; `docker stats`; `memory_pressure` | Pass: pods 8.29 GiB (24 h median 7.96, p95 8.37, peak 8.81), node 9.28 of 11.91 GiB, lab host 55% free | 2026-11-12 | [sprint2_retro.md](../sprints/sprint-2/sprint2_retro.md#memory-measured-again-t119) |
+
+## Sprint 3
+
+### Ticket 3.4: Orders service (T061–T065, T070)
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| T054 passes | The 15 contract tests written first in Ticket 3.2, `xfail` removed, on Postgres 17 (testcontainers) on the lab host; then CI | Pass: all 15; 55 passed in the service, 3 skipped (template tests for `azp`-checking services); CI build, pre-commit, secret-scan and SonarCloud green | 2026-11-15 | app #20 |
+| An order's state and its event are never seen apart | Tests: one outbox row per state change, none for `pending`, none when a result for a final order repeats; Listings down during a result answers 503 and writes neither; the relay leaves `published_at` empty when the broker gives no confirm | Pass in tests (state and outbox row commit in one transaction); live check open until Orders runs (Ticket 3.7) | 2026-11-15 | app #20 |
+| The relay publishes with publisher confirms under the row's trace context (T065, R9) | Test against RabbitMQ 4.3.4 (the lab's version) in a container: relay one row, read it from a queue bound to `order.*` | Pass: routing key `order.paid`, message ID and `event_id` = the outbox row, persistent, `traceparent` in the checkout's trace; `published_at` set after the confirm | 2026-11-15 | app #20 |
+| Expiry releases, cancels and waits; a late success is refunded (T064, R8) | Tests: an expired order with a PaymentIntent stays `pending` after release and cancel, then `canceled` → `failed`; a success after expiry finds the hold released → `refunded`; a second pass does nothing | Pass in tests | 2026-11-15 | app #20 |
+| The topology is in both environments (T070) | gitops #58 synced; `kubectl get` the operator objects; `rabbitmqctl list_exchanges`, `list_queues`, `list_bindings` in `sv-dev` and `sv-prod` | Pass: `orders-dev` and `orders-prod` Synced/Healthy (37 apps); 7 objects Ready in each; `orders` topic, `orders.dlx` fanout, `notifications.orders` quorum with `x-delivery-limit` 5 and `x-dead-letter-exchange` `orders.dlx`, `notifications.orders.dead` quorum, bindings `order.paid`, `order.refunded` and the dead-letter one | 2026-11-15 | gitops #58 |
