@@ -238,6 +238,7 @@ resource "kubernetes_secret_v1" "keycloak_realm_clients" {
       }
     ]...),
     { SV_DEV_SEED_SECRET = random_password.keycloak_dev_seed.result },
+    { for env in local.env_names : "SV_${upper(env)}_NOTIFICATIONS_SECRET" => random_password.keycloak_notifications[env].result },
   )
 }
 
@@ -253,7 +254,19 @@ resource "kubernetes_secret_v1" "keycloak_clients" {
   data = merge(
     { for c in ["bff", "orders", "payments", "listings"] : c => var.keycloak.clients[each.key][c] },
     each.key == "dev" ? { seed = random_password.keycloak_dev_seed.result } : {},
+    { notifications = random_password.keycloak_notifications[each.key].result },
   )
+}
+
+# Ticket 3.6 (T072, Sprint 3 spikes "Keycloak service client for Notifications"): the
+# notifications client in each realm, a service account that may only view users, through which
+# Notifications reads buyers' and sellers' email addresses. Generated here like the seed client's,
+# so secrets.auto.tfvars does not change; created before the realm files refer to it.
+resource "random_password" "keycloak_notifications" {
+  for_each = local.env_names
+
+  length  = 32
+  special = false
 }
 
 # sv-dev only (T120, Sprint 2 spikes "Script token"): the seed client, a service account that may
