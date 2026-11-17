@@ -15,7 +15,7 @@ On dev, a buyer signed in through the BFF pays for a seeded listing with `pm_car
 
 Decisions carried in
 - Destination charges on Accounts v2 connected accounts, with `application_fee_amount` and `transfer_data.destination`, `automatic_payment_methods` and no `payment_method_types` (T009). The platform fee is a percentage, default 10, rounded half up (research R7).
-- Stripe events reach the cluster through `stripe listen` inside it (R4). The platform session already forwards `payment_intent.succeeded` and `payment_intent.payment_failed` to `/webhooks/stripe`, which returns 404 until Ticket 3.5. Missed events are reconciled every 5 minutes (R5). The forwarder's output is redacted (gitops #54).
+- Stripe events reach the cluster through `stripe listen` inside it (R4). The platform session forwards `payment_intent.succeeded`, `payment_intent.payment_failed` and (since gitops #61) `payment_intent.canceled` to `/webhooks/stripe`, which answers 200 since Ticket 3.5. Missed events are reconciled every 5 minutes (R5). The forwarder's output is redacted (gitops #54).
 - An order's state change and its outbox row commit in one transaction; the relay publishes with confirms and carries the trace context in the row (R9). Consumers are idempotent by `event_id`.
 - Users and clients come from the realm files through keycloak-config-cli (T120); nothing is changed by hand in the live realm.
 - Prod gets each new service at 0 replicas until its first promotion, as Payments did (`first-prod-replicas`).
