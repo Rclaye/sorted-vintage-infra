@@ -187,7 +187,7 @@ Events from reconciliation have no Stripe event ID, so they use `recon:<payment_
 | --- | --- | --- |
 | id | UUID | |
 | event_id | UUID | The source message's `event_id`; unique with `template`, so a redelivered message sends nothing new |
-| template | enum | `order_confirmation_buyer`, `item_sold_seller` (FR-015) |
+| template | enum | `order_confirmation_buyer`, `item_sold_seller` (FR-015), `order_refund_buyer` (the refund notice on `order.refunded`, contracts/orders-events.asyncapi.yaml) |
 | recipient_sub | UUID | The address is looked up from Keycloak at send time |
 | attempts | integer | At most 5 |
 | state | enum | `queued`, `sent`, `dead_lettered` |
