@@ -3,18 +3,24 @@
 // DESTROY=true plans a destroy and needs two approvals. State and secrets.auto.tfvars are in
 // bot's private ~/sv-terraform, shared with make rebuild. Then verify (T107) runs the current
 // sprint's verify script on the lab host (reads and server-side dry runs only) and fails the build if it fails.
+// REBUILD_DRILL=true runs the rebuild drill instead of plan and apply (T077, SC-004, runbook
+// docs/runbooks/rebuild.md): two approvals, preflight, destroy, a pause for the restore PR in
+// gitops, apply, wait for health, the data check and a scripted purchase; the times are archived
+// as rebuild-drill.json and rebuild-drill.txt. Steps in scripts/lab/rebuild-drill.sh.
 pipeline {
   agent { label 'lab' }
   options {
     disableConcurrentBuilds()
     buildDiscarder(logRotator(numToKeepStr: '30'))
-    timeout(time: 2, unit: 'HOURS')
+    timeout(time: 4, unit: 'HOURS')   // a rebuild drill waits for people up to 2.5 h
   }
   parameters {
     booleanParam(name: 'DESTROY', defaultValue: false,
       description: 'Plan and apply terraform destroy for bootstrap, then cluster. Needs two approvals. Garage data in ~/sv-data is kept.')
     string(name: 'SPRINT', defaultValue: '',
       description: 'Sprint whose sprints/sprint-N/verify_sprintN.sh the verify stage runs. Empty: the highest sprint that has its verify script.')
+    booleanParam(name: 'REBUILD_DRILL', defaultValue: false,
+      description: 'Destroy the lab and rebuild it from Git with the data restored, timed (SC-004). Needs two approvals and the restore PR in gitops merged when asked. Not with DESTROY.')
   }
   environment {
     PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
@@ -23,6 +29,10 @@ pipeline {
     SV_OWNER = 'Rclaye'
   }
   stages {
+    stage('parameters') {
+      when { expression { params.DESTROY && params.REBUILD_DRILL } }
+      steps { error('DESTROY and REBUILD_DRILL cannot both be set') }
+    }
     stage('fmt') {
       steps { sh 'terraform fmt -check -recursive -diff terraform' }
     }
@@ -39,6 +49,7 @@ pipeline {
       steps { sh 'tfsec terraform --no-color --concise-output' }
     }
     stage('plan') {
+      when { expression { !params.REBUILD_DRILL } }
       steps {
         script {
           def destroy = params.DESTROY ? '-destroy' : ''
@@ -82,6 +93,94 @@ pipeline {
             sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
             sh 'scripts/lab/rebuild-wait.sh'
           }
+        }
+      }
+    }
+    stage('rebuild-drill') {
+      when { expression { params.REBUILD_DRILL } }
+      environment {
+        DRILL_OUT = "${env.WORKSPACE}/drill"
+        SV_GITOPS = "${env.WORKSPACE}@gitops"
+        SV_APP = "${env.WORKSPACE}@app"
+      }
+      stages {
+        stage('drill: approve') {
+          steps {
+            timeout(time: 1, unit: 'HOURS') {
+              input(message: 'Rebuild drill: destroy the lab and rebuild it from Git with the data restored? Nothing else should be in flight.',
+                    ok: 'Drill (1 of 2)')
+            }
+            timeout(time: 30, unit: 'MINUTES') {
+              input(message: 'Second approval: this deletes the Kind cluster. The data comes back only from the Garage archives in ~/sv-data.',
+                    ok: 'Drill (2 of 2)')
+            }
+          }
+        }
+        stage('drill: preflight') {
+          steps {
+            dir(env.SV_GITOPS) {
+              git(url: "https://github.com/${env.SV_OWNER}/sorted-vintage-gitops.git", branch: 'main', poll: false, changelog: false)
+            }
+            sh 'scripts/lab/rebuild-drill.sh preflight'
+          }
+        }
+        stage('drill: destroy') {
+          steps {
+            sh 'scripts/lab/rebuild-drill.sh mark destroy_start'
+            sh 'terraform -chdir=terraform/bootstrap plan -no-color -destroy -var cluster_state_path=$HOME/sv-terraform/cluster.tfstate -var-file=$HOME/sv-terraform/secrets.auto.tfvars -out=bootstrap.tfplan'
+            sh 'terraform -chdir=terraform/cluster plan -no-color -destroy -out=cluster.tfplan'
+            sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
+            sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
+            sh 'scripts/lab/rebuild-drill.sh mark destroy_done'
+          }
+        }
+        stage('drill: restore PR') {
+          steps {
+            timeout(time: 1, unit: 'HOURS') {
+              input(message: 'The lab is destroyed. Merge the restore PR in gitops now (each restore.yaml to recovery mode: from the archive in use to a new name, runbook step 3), then continue.',
+                    ok: 'Merged, rebuild')
+            }
+            dir(env.SV_GITOPS) {
+              git(url: "https://github.com/${env.SV_OWNER}/sorted-vintage-gitops.git", branch: 'main', poll: false, changelog: false)
+            }
+            sh 'scripts/lab/rebuild-drill.sh restore-pr'
+          }
+        }
+        stage('drill: apply') {
+          steps {
+            // The bootstrap plan needs the new cluster, so each layer is planned just before it is applied.
+            sh 'scripts/lab/rebuild-drill.sh mark apply_start'
+            sh 'terraform -chdir=terraform/cluster plan -no-color -out=cluster.tfplan'
+            sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
+            sh 'terraform -chdir=terraform/bootstrap plan -no-color -var cluster_state_path=$HOME/sv-terraform/cluster.tfstate -var-file=$HOME/sv-terraform/secrets.auto.tfvars -out=bootstrap.tfplan'
+            sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
+            sh 'scripts/lab/rebuild-drill.sh mark apply_done'
+            // Image pulls on an empty node plus about 4 minutes of recovery per database cluster.
+            withEnv(['REBUILD_WAIT=1500']) { sh 'scripts/lab/rebuild-wait.sh' }
+            sh 'scripts/lab/rebuild-drill.sh mark healthy'
+          }
+        }
+        stage('drill: data restored') {
+          steps {
+            sh 'scripts/lab/rebuild-drill.sh check-data'
+            sh 'scripts/lab/rebuild-drill.sh mark data_checked'
+          }
+        }
+        stage('drill: purchase') {
+          steps {
+            dir(env.SV_APP) {
+              git(url: "https://github.com/${env.SV_OWNER}/sorted-vintage-app.git", branch: 'main', poll: false, changelog: false)
+            }
+            sh 'scripts/lab/rebuild-drill.sh purchase'
+            sh 'scripts/lab/rebuild-drill.sh mark purchase_done'
+          }
+        }
+      }
+      post {
+        always {
+          sh 'scripts/lab/rebuild-drill.sh report || true'
+          archiveArtifacts(artifacts: 'drill/rebuild-drill.*', allowEmptyArchive: true)
+          echo 'After a restore: a second gitops PR returns each restore.yaml to initdb mode on its new name (runbook step 6).'
         }
       }
     }
