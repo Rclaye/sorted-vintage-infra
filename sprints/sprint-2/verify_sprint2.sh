@@ -53,8 +53,17 @@ done
 echo "Seed job (T051)"
 job="$(k "-n sv-dev get job seed -o jsonpath={.status.succeeded}" 2>/dev/null || true)"
 [[ "$job" == 1 ]] && pass "seed job succeeded in sv-dev" || fail "seed job has not succeeded in sv-dev"
-seeded="$(proxy sv-dev listings '/listings?limit=60' | jq '[.items[] | select(.title | test(" #[0-9]{2}$"))] | length')"
-[[ "$seeded" -ge "$SEEDED" ]] && pass "$seeded seeded listings in search" || fail "only $seeded of $SEEDED seeded listings in search"
+# Seeded listings that sold (test purchases, Sprint 3) leave search but stay on their seller's
+# page, so the count is taken there: available and sold together.
+search="$(proxy sv-dev listings '/listings?limit=60')"
+in_search="$(jq '[.items[] | select(.title | test(" #[0-9]{2}$"))] | length' <<<"$search")"
+seeded=0
+for sub in $(jq -r '[.items[] | select(.title | test(" #[0-9]{2}$")) | .seller_sub] | unique | .[]' <<<"$search"); do
+  n="$(proxy sv-dev listings "/sellers/$sub" | jq '[(.available + .sold)[] | select(.title | test(" #[0-9]{2}$"))] | length')"
+  seeded=$(( seeded + n ))
+done
+[[ "$seeded" -ge "$SEEDED" ]] && pass "$seeded seeded listings ($in_search in search, the rest sold)" \
+  || fail "only $seeded of $SEEDED seeded listings exist"
 photos="$(proxy sv-dev listings '/listings?limit=60' | jq '[.items[] | select(.title | test(" #[0-9]{2}$")) | select((.photos | length) == 0)] | length')"
 [[ "$photos" == 0 ]] && pass "every seeded listing has a photo" || fail "$photos seeded listings have no photo"
 
