@@ -11,9 +11,7 @@ Status: **Pass**, **Open** (not done or not recorded), **Partial** (done, but no
 | Ticket | Check | Why open | When |
 | --- | --- | --- | --- |
 | (none) | Every Sprint 2 check has run; Sprint 2 closed on 2026-11-12 (Tickets 2.7 and 2.8 below) | | |
-| 3.1–3.3 | Rows for the spikes, the contract tests written first and Listings reservations | Those tickets closed before their rows were added; the evidence is in `sprints/sprint-3/spikes.md`, app #18 and #19, infra #51 and #52 | At Sprint 3 close |
-| 3.5 | Orders' expiry cancelling a PaymentIntent through Payments' `/payment-intents/{id}/cancel` in sv-dev | Ticket 3.7's purchases created PaymentIntents through Payments' API and applied both outcomes to real orders (rows below); no order has expired with a PaymentIntent yet | Ticket 3.8 (T075 script) |
-| 3.6 | A message failing five times in `notifications.orders.dead` with its row `dead_lettered`, in sv-dev | A live order's two emails were seen in Mailpit in Ticket 3.7 (rows below); the dead-letter path is checked in tests against RabbitMQ 4.3.4 with the T070 topology | Ticket 3.8 |
+| 3.5 | Orders' expiry cancelling a PaymentIntent through Payments' `/payment-intents/{id}/cancel` in sv-dev | Needs an order left unpaid for 10 minutes, too slow for a verify run; covered by tests (Tickets 3.4, 3.5) | Sprint 4, Ticket 4.2 (the traffic generator leaves holds unpaid) |
 
 The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 1.4) were run on 2026-11-05; see their rows below.
 
@@ -224,3 +222,25 @@ The three checks that were never run in Sprints 0 and 1 (two from 0.2, one from 
 | A PaymentIntent through Payments' own API, its outcome applied to a real order (open since 3.5) | Both purchases above: Orders called `POST /payment-intents`; each outcome reached Orders' `payment-result` | Pass (create, success, decline); the cancel route through expiry stays open | 2026-11-18 | app #21, #25 |
 | A live order's emails in Mailpit (open since 3.6) | The paid purchase above | Pass; the live dead-letter check stays open | 2026-11-18 | app #22, #25 |
 | `order_id` on spans and log lines in every service (T083) | Tests in each service; then a $20 test purchase (Laura Ashley dress #14) in sv-dev; count each service's log lines with that `order_id`; Tempo search `{ span.order_id = "…" }` | Pass: BFF 8, Orders 10, Payments 8, Notifications 6 lines (access lines, outgoing calls, webhook work found by baggage); Listings wrote no log lines, and Tempo has its spans with `order_id` in all 3 traces; baggage that is not a UUID is ignored (tested) | 2026-11-18 | app #26 |
+
+### Tickets 3.1 to 3.3: spikes, contract tests first, Listings reservations
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| The sprint's risks retired first (3.1) | Spikes on `sv-spike` and the dev Stripe sandbox: destination charge and full refund, why `stripe trigger` fails, the Payment Element under the BFF's CSP, the T070 topology, the Notifications Keycloak client | Pass, each with the changes it named, all used later in the sprint | 2026-11-12 | [spikes.md](../sprints/sprint-3/spikes.md), infra #51 |
+| Contract tests written first (3.2) | 53 tests as strict xfails (pytest) or `@Pending` (JUnit), each naming its task, so CI fails if one passes with its marker on | Pass: CI green with every marker; each later ticket removed its markers (Listings 8, Orders 15, Payments 21, Notifications 9) | 2026-11-13 | app #18, infra #52 |
+| Listings holds an item for one buyer only (3.3, T059, T060) | The 8 reservation tests without `@Pending`; Flyway at version 2 and the sweeper running in sv-dev | Pass | 2026-11-13 | app #19 |
+
+### Ticket 3.8: verify and measure (T075, T058, T113, memory checkpoint 1)
+
+| Check | How | Result | Date | Evidence |
+| --- | --- | --- | --- | --- |
+| `verify_sprint3.sh` passes from the workstation (acceptance) | Full run against the lab: Sprints 1 and 2 first (T113's browse check within it), then Sprint 3's reads and writes | Pass in 2 min 14 s | 2026-11-18 | this ticket's PR |
+| ...and in the Jenkins verify stage (acceptance) | On the lab host as bot with `MINI=local`, from this branch, with Jenkins' gitops checkout | Pass: reads only, the writing checks SKIP | 2026-11-18 | this ticket's PR |
+| A scripted purchase ends paid with a balanced ledger and two emails (T075) | `verify_purchase.py`: the verify seller lists an item, the verify buyer checks out through the BFF, Stripe confirm with `pm_card_visa` | Pass: `paid` 2.2–3.3 s after confirming; ledger platform 50 + seller 450 = 500 cents; buyer's and seller's emails in Mailpit; the item `sold` | 2026-11-18 | this ticket's PR |
+| A declined card releases the item (T075) | Same, `pm_card_chargeDeclined` (Stripe 402) | Pass: order `failed` (`card_declined`), the item available again, no email; the item deleted afterwards | 2026-11-18 | this ticket's PR |
+| A message Notifications cannot read dead-letters live (open since 3.6) | A malformed `order.paid` published from the Orders pod with Orders' own RabbitMQ user | Pass: rejected into `notifications.orders.dead`. The five-failure path (row `dead_lettered`) stays checked in tests against RabbitMQ 4.3.4 | 2026-11-18 | this ticket's PR, app #22 |
+| No item is sold twice (T058, SC-003) | `make loadtest-double-sell ENV=dev` on the lab host: 1,000 simultaneous checkouts by the verify buyer on 100 fresh items, winners confirmed with `pm_card_visa`, paid orders counted per item in Orders' database | Pass, twice: exactly 100 payment pages (one per item), 900 refused `not_available`, no errors, 100 items sold once, none twice; 13.9–17.0 s for the 1,000 attempts | 2026-11-18 | the load-test app PR |
+| The verify buyer exists (T075, T058) | Terraform Secret `verify-buyer`, the seed job's run after a requested `seed-dev` sync | Pass: `POST keycloak/users/verify-buyer -> 201`, no Stripe account, no listings | 2026-11-18 | infra #58, gitops #70, app #27 |
+| Sprint 2's seeded check survives purchases | Seeded listings counted on the demo sellers' pages, available and sold | Pass: 50 seeded listings (48 in search, 2 sold) | 2026-11-18 | this ticket's PR |
+| Memory checkpoint 1 | Prometheus working sets through the API server proxy, as T032 and T119; `docker stats`; `memory_pressure` | Pass: pods 8.23 GiB (24 h median 8.18, p95 8.56, peak 8.80), node 9.17 of 11.91 GiB, lab host 56% free; p95 under the 10 GiB trigger, no lever pulled | 2026-11-18 | [sprint3_retro.md](../sprints/sprint-3/sprint3_retro.md#memory-checkpoint-1) |
