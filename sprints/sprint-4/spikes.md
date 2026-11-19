@@ -24,3 +24,24 @@ What it means for T076 and T110:
 - Same pattern, a separate entry, for the Keycloak database cluster (`keycloak-db`).
 - Not seen yet: the managed roles (`orders`, `payments`, `notifications`) after the good recovery (checked only on the failed one), and the `Database` objects adopting the restored databases. Check both when T076 is tried on `sv-spike` with the lab's real manifests, before the lab.
 - A first pull of the Postgres image takes minutes on an empty node: the rebuild drill's 30-minute budget (SC-004) must allow for image pulls.
+
+## Postgres restore mode with the lab's own manifests (Ticket 4.1, T076, T110)
+
+**Pass, with one guard needed**, 2026-11-19. On `sv-spike` with the same versions as above: `platform/postgres/base` rendered by kustomize into namespace `sv-dev` (the `Cluster`, its three `Database` objects, the `ScheduledBackup` and the `ObjectStore`), the `pg-*-app` and `s3-backups` Secrets made as Terraform makes them, and a patch per mode.
+
+| Step | Result |
+| --- | --- |
+| 1. `initdb` mode, as the lab has it | Ready; `Database` objects for orders, payments, notifications applied; the ScheduledBackup's immediate base backup **completed after 576 s** |
+| 2. Destroy (manifests, Backups, volume), then **recovery mode** (recover from `pg`, archive to `pg-r1`) | **Ready in 239 s**, all data back (listings 40 rows, orders 7); the three `Database` objects applied again; the roles orders, payments, notifications and listings each **signed in with its Secret's password**; continuous archiving working under `pg-r1` |
+| 3. **Back to `initdb` mode** (archive to `pg-r1`) applied to the live recovered cluster | **Accepted, no restart**, data untouched, archiving still working: a bootstrap change on a running cluster is ignored |
+| 4. Destroy, then `initdb` mode archiving into the non-empty `pg-r1` (a rebuild that **forgot to bump** the names) | **Came up Ready and empty**; only archiving failed: `ContinuousArchiving False` ("unexpected failure invoking barman-cloud-wal-archive") |
+
+An earlier run of the same spike recovered nothing ("no target backup found"): it destroyed the cluster about 3 minutes after the immediate backup started, before the backup completed. The lab's daily backups do complete (checked read-only in sv-dev, sv-prod and keycloak on 2026-11-19, latest 03:18 UTC), but some took 15 minutes.
+
+What it means for T076, T110, T077 and T078:
+
+- **The restore mode is a committed file per environment** (and one for `keycloak-db`), normally in `initdb` mode naming the archive in use. A restore is one pull request that switches it to recovery from the archive in use to the next name; after the restore, a second one returns it to `initdb` mode on the new name (step 3: harmless on the live cluster).
+- **Order of a restore: confirm a completed base backup, destroy, merge the restore PR, apply.** Never merge the switch while the old cluster runs: it would start archiving to the new name and the recovery would miss everything written after that.
+- **The drill waits for a completed base backup** newer than the last change it must keep (or takes one and waits, up to 15 minutes) before it destroys anything.
+- **A forgotten bump is silent except for archiving** (step 4). Sprint 1's verify check "continuous WAL archiving working", run on every Jenkins build, fails in exactly that state; the runbook says to treat that failure after a rebuild as "restore not done".
+- Recovery itself took 3.5 to 4 minutes per cluster on an empty node; with the image pull and the platform, SC-004's 30 minutes looks reachable but has little slack.
