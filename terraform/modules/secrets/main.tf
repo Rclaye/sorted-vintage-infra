@@ -298,6 +298,28 @@ resource "kubernetes_secret_v1" "dev_verify_seller" {
   }
 }
 
+# Ticket 3.8 (T075, T058): the sv-dev buyer that verify_sprint3.sh and the double-sell load test
+# sign in as, through the BFF login form like a browser. The seed job creates the user with this
+# password (no Stripe account: it only buys); the user is never in a realm file.
+resource "random_password" "dev_verify_buyer" {
+  length  = 32
+  special = false
+}
+
+resource "kubernetes_secret_v1" "dev_verify_buyer" {
+  metadata {
+    name      = "verify-buyer"
+    namespace = kubernetes_namespace_v1.env["dev"].metadata[0].name
+  }
+
+  type = "kubernetes.io/basic-auth"
+
+  data = {
+    username = "verify-buyer@sortedvtg.lan"
+    password = random_password.dev_verify_buyer.result
+  }
+}
+
 # sv-dev only (T051, decided 2026-11-11): the demo sellers the seed job creates, and the Stripe
 # test account each one is linked to. Stripe will not let the platform accept its terms for a
 # seller (Ticket 2.1), so every account was onboarded once by hand and its id is kept in
