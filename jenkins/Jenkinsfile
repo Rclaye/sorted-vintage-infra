@@ -54,9 +54,10 @@ pipeline {
         script {
           def destroy = params.DESTROY ? '-destroy' : ''
           def boot = '-var cluster_state_path=$HOME/sv-terraform/cluster.tfstate -var-file=$HOME/sv-terraform/secrets.auto.tfvars'
-          // -detailed-exitcode: 0 no changes, 1 error, 2 changes.
+          // -detailed-exitcode: 0 no changes, 1 error, 2 changes. The cluster plan prints only its
+          // summary: in full it would show the Kind cluster's client key (scripts/lab/quiet-plan.sh).
           def b = sh(returnStatus: true, script: "terraform -chdir=terraform/bootstrap plan -no-color -detailed-exitcode ${destroy} ${boot} -out=bootstrap.tfplan")
-          def c = sh(returnStatus: true, script: "terraform -chdir=terraform/cluster plan -no-color -detailed-exitcode ${destroy} -out=cluster.tfplan")
+          def c = sh(returnStatus: true, script: "scripts/lab/quiet-plan.sh -chdir=terraform/cluster plan -no-color -detailed-exitcode ${destroy} -out=cluster.tfplan")
           if (b == 1 || c == 1) { error('terraform plan failed') }
           env.CHANGES = (b == 2 || c == 2) ? 'true' : 'false'
           echo(env.CHANGES == 'true' ? 'Plans have changes; waiting for approval.' : 'No changes. Nothing to apply.')
@@ -128,7 +129,7 @@ pipeline {
           steps {
             sh 'scripts/lab/rebuild-drill.sh mark destroy_start'
             sh 'terraform -chdir=terraform/bootstrap plan -no-color -destroy -var cluster_state_path=$HOME/sv-terraform/cluster.tfstate -var-file=$HOME/sv-terraform/secrets.auto.tfvars -out=bootstrap.tfplan'
-            sh 'terraform -chdir=terraform/cluster plan -no-color -destroy -out=cluster.tfplan'
+            sh 'scripts/lab/quiet-plan.sh -chdir=terraform/cluster plan -no-color -destroy -out=cluster.tfplan'
             sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'
             sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
             sh 'scripts/lab/rebuild-drill.sh mark destroy_done'
@@ -150,7 +151,7 @@ pipeline {
           steps {
             // The bootstrap plan needs the new cluster, so each layer is planned just before it is applied.
             sh 'scripts/lab/rebuild-drill.sh mark apply_start'
-            sh 'terraform -chdir=terraform/cluster plan -no-color -out=cluster.tfplan'
+            sh 'scripts/lab/quiet-plan.sh -chdir=terraform/cluster plan -no-color -out=cluster.tfplan'
             sh 'terraform -chdir=terraform/cluster apply -no-color cluster.tfplan'
             sh 'terraform -chdir=terraform/bootstrap plan -no-color -var cluster_state_path=$HOME/sv-terraform/cluster.tfstate -var-file=$HOME/sv-terraform/secrets.auto.tfvars -out=bootstrap.tfplan'
             sh 'terraform -chdir=terraform/bootstrap apply -no-color bootstrap.tfplan'

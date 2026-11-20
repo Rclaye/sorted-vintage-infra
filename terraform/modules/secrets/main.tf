@@ -33,12 +33,23 @@ resource "kubernetes_namespace_v1" "env" {
   metadata {
     name = "sv-${each.key}"
   }
+
+  # Deleting a namespace waits for its Postgres, RabbitMQ and other finalizers; it took over 5
+  # minutes (the default) in the rebuild drill of 2026-11-20.
+  timeouts {
+    delete = "15m"
+  }
 }
 
 # Traefik serves this certificate as its default (research R18).
 resource "kubernetes_namespace_v1" "traefik" {
   metadata {
     name = "traefik"
+  }
+
+  # As for the env namespaces: deleting waits for finalizers.
+  timeouts {
+    delete = "15m"
   }
 }
 
@@ -156,6 +167,11 @@ resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
     name = "monitoring"
   }
+
+  # As for the env namespaces: deleting waits for finalizers.
+  timeouts {
+    delete = "15m"
+  }
 }
 
 resource "random_password" "grafana_admin" {
@@ -181,6 +197,11 @@ resource "kubernetes_secret_v1" "grafana_admin" {
 resource "kubernetes_namespace_v1" "keycloak" {
   metadata {
     name = "keycloak"
+  }
+
+  # As for the env namespaces: deleting waits for finalizers.
+  timeouts {
+    delete = "15m"
   }
 }
 
