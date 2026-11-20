@@ -74,6 +74,7 @@ Each step can be run by hand as `bot` too, with `SV_GITOPS` (and `SV_APP` for th
 - **A cluster comes up empty and archiving fails** (`ContinuousArchiving False`, Sprint 1's archiving check fails): the restore PR was not merged, or a `restore.yaml` still names an archive already in use. The data is still in Garage. Destroy, fix the file (recover from the archive that holds the data, write to an unused name), rebuild.
 - **"no target backup found"** in the recovery pod's log: there was no completed base backup under the name recovered from. Recover from an older archive name that has one, or rebuild without data.
 - **A cluster stays in "Setting up primary"** for more than 10 minutes: the new archive name is already in use. Use the next unused name.
+- **"a sync failed"** from the wait after a rebuild: an Argo CD sync ended Failed, usually a PostSync hook such as the seed job (the app still reads Synced/Healthy, and nothing retries it on the same commit). Read the hook's log, fix the cause, then sync that app again with the command the error prints. The seed job itself waits up to 10 minutes for Keycloak, Payments and Listings.
 - **A service cannot reach its database** after a restore: compare the role's password with `secrets.auto.tfvars`; the fixed passwords must not have changed between the backup and the rebuild.
 
 ## Session stop and start

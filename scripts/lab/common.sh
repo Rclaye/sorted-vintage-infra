@@ -26,13 +26,23 @@ node_running() {
 # argument (UTC, 2026-11-05T01:43:58Z), an app also counts only once Argo CD has reconciled it
 # after that time: right after a node restart the statuses are the saved ones from before the
 # stop, and they read Synced/Healthy before anything has been checked.
+# A sync that ended Failed or Error stops the wait at once: a failed PostSync hook (the seed job)
+# leaves the app Synced/Healthy and nothing retries it. Only syncs that finished after the third
+# argument count ("0" for all, as on a rebuilt cluster; the second argument when it is given;
+# otherwise none, so an old failure does not block make up).
 wait_apps_healthy() {
-  timeout="$1"; since="${2:-}"; start=$(date +%s)
+  timeout="$1"; since="${2:-}"; failed_since="${3:-$since}"; start=$(date +%s)
   while :; do
     out=$(k -n argocd get applications.argoproj.io \
-      -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status} {.status.reconciledAt}{"\n"}{end}' 2>/dev/null) || out=""
+      -o jsonpath='{range .items[*]}{.metadata.name}|{.status.sync.status}|{.status.health.status}|{.status.reconciledAt}|{.status.operationState.phase}|{.status.operationState.finishedAt}|{.status.operationState.message}{"\n"}{end}' 2>/dev/null) || out=""
     total=$(printf '%s\n' "$out" | grep -c . || true)
-    bad=$(printf '%s\n' "$out" | grep . | awk -v s="$since" '$2 != "Synced" || $3 != "Healthy" || (s != "" && $4 < s) {print $1, $2, $3, ($4 < s ? "not reconciled since start" : "")}' || true)
+    failed=$(printf '%s\n' "$out" | grep . | awk -F'|' -v f="$failed_since" \
+      'f != "" && ($5 == "Failed" || $5 == "Error") && $6 >= f {print $1 ": sync " $5 " at " $6 ": " $7}' || true)
+    if [ -n "$failed" ]; then
+      printf '%s\n' "$failed" >&2
+      die "a sync failed (listed above); fix the cause, then sync the app again: kubectl -n argocd patch application <name> --type merge -p '{\"operation\":{\"sync\":{\"revision\":\"main\"}}}'"
+    fi
+    bad=$(printf '%s\n' "$out" | grep . | awk -F'|' -v s="$since" '$2 != "Synced" || $3 != "Healthy" || (s != "" && $4 < s) {print $1, $2, $3, ($4 < s ? "not reconciled since start" : "")}' || true)
     if [ "$total" -gt 0 ] && [ -z "$bad" ]; then
       log "all $total Argo CD apps Synced/Healthy after $(( $(date +%s) - start ))s"
       return 0
