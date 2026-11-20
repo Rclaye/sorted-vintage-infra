@@ -10,6 +10,27 @@ terraform {
   }
 }
 
+locals {
+  # Ready True: Healthy. Otherwise Progressing with the operator's message, so a sync wave keeps
+  # waiting while the operator retries (it does, with backoff) rather than failing the sync.
+  topology_health = <<-EOT
+    hs = { status = "Progressing", message = "waiting for the topology operator" }
+    if obj.status ~= nil and obj.status.conditions ~= nil then
+      for _, c in ipairs(obj.status.conditions) do
+        if c.type == "Ready" then
+          if c.status == "True" and (obj.status.observedGeneration == nil or obj.status.observedGeneration >= obj.metadata.generation) then
+            hs.status = "Healthy"
+            hs.message = ""
+          elseif c.message ~= nil and c.message ~= "" then
+            hs.message = c.message
+          end
+        end
+      end
+    end
+    return hs
+  EOT
+}
+
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "oci://ghcr.io/argoproj/argo-helm"
@@ -43,6 +64,13 @@ resource "helm_release" "argocd" {
           end
           return hs
         EOT
+        # RabbitMQ users and permissions (Messaging Topology Operator) are Healthy only once the
+        # operator has declared them (condition Ready). Argo CD has no built-in check, so they
+        # counted as Healthy at once: the User's earlier sync wave did not wait, and a Permission
+        # that failed (vhost_or_user_not_found, rebuild drill 2026-11-20) left its app looking
+        # Healthy while the operator backed off for up to 16 minutes.
+        "resource.customizations.health.rabbitmq.com_User"       = local.topology_health
+        "resource.customizations.health.rabbitmq.com_Permission" = local.topology_health
       }
     }
     # Metrics Services only; the ServiceMonitor lives in Git (gitops platform/argocd/monitoring),
